@@ -223,9 +223,9 @@ class UserAPI(ORMBase):
     def get_user_detail(self,db:Session,id:int)->Rsp:
         """获取用户详情
         """
-        stmt = select(User.id,User.nick_name,User.real_name,User.phone,User.status).where(and_(User.deleted==False,User.id == id))
+        stmt = select(User.id,User.acct,User.nick_name,User.real_name,User.phone,User.status).where(and_(User.deleted==False,User.id == id))
         try:
-            result = self.orm_one(stmt)
+            result = self.orm_one(db,stmt)
         except Exception as e:
             raise RspError(data=f'{e}')
         return Rsp(data=result)
@@ -264,15 +264,11 @@ class UserAPI(ORMBase):
                 return Rsp(code=1,message='该账户已被停用')
             
             jwt = jwt_api.encode(id=result['id'])
-            result['jwt'] =jwt
-
-            # 认证密码不返回
-            result.pop('value')
 
         except Exception as e:
             raise RspError(data=f'{e}')
         
-        return Rsp(data=result)
+        return Rsp(data=dict(jwt=jwt))
     
 
 user_api = UserAPI()

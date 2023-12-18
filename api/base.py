@@ -11,9 +11,11 @@ def get_db()->Generator:
     with SessionLocal() as session:
         yield session
 
+
 oauth2_schema=OAuth2PasswordBearer(tokenUrl='token')
-def get_user_info(token=Depends(oauth2_schema),db=Depends(get_db))->dict:
+def get_user(token=Depends(oauth2_schema),db=Depends(get_db))->dict:
     """获取已登录的用户信息
     """
     user = user_api.jwt_decode(token)
     return dict(id=user['id'],db=db)
+
