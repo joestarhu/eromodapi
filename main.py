@@ -1,11 +1,20 @@
 from fastapi import FastAPI
-from tomllib import load as toml_load
-from eromodapi.config.settings import settings
+from fastapi.middleware.cors import CORSMiddleware
+from eromodapi.config.settings import settings #noqa
+from eromodapi.api import user
+
+
 app = FastAPI()
 
-@app.get('/')
-def toml_hello():
-    return settings.config['mysql']
+
+# 跨域设定CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-
+app.include_router(user.api,tags=['统一用户中心'])

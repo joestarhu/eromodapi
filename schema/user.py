@@ -1,0 +1,278 @@
+from datetime import datetime
+from pydantic import BaseModel
+from sqlalchemy import select,update,delete,and_,alias
+from sqlalchemy.orm.session import Session
+
+from eromodapi.config.settings import settings,hash_api,jwt_api,AuthType,UserStatus #noqa
+from eromodapi.model.user import User,UserAuth #noqa
+from eromodapi.schema.base import ORMBase,Rsp,RspError,Pagination #noqa
+
+
+class UserCreate(BaseModel):
+    acct:str
+    nick_name:str
+    real_name:str = ''
+    phone:str = ''
+    status:int = UserStatus.ENABLE.value
+    avatar:str = ''
+
+class UserUpdate(BaseModel):
+    id:int
+    nick_name:str
+    real_name:str = ''
+    phone:str = ''
+    status:int = 1
+    avatar:str = ''
+
+class UserDelete(BaseModel):
+    id:int
+
+class UserList(Pagination):
+    nick_name:str | None = None
+    phone:str | None = None
+    status:int | None = None
+
+class PasswordLogin(BaseModel):
+    acct:str
+    passwd:str
+
+
+
+class UserAPI(ORMBase):
+    def jwt_decode(self,token:str)->dict:
+        """jwt token解码
+
+        Args:
+            token:str jwt字符串
+        """
+        try:
+            data = jwt_api.decode(token)
+        except Exception as e:
+            raise RspError(401,'无效的用户token',f'{e}')
+        return data
+    
+    def chk_required_field(self,acct:str,nick_name:str) -> Rsp | None:
+        """检查必填字段是否
+
+        Args:
+            acct:str 账号
+            nick_name:str 昵称
+        
+        Returns:
+            Success:None 成功
+            Failed:Rsp 返回错误信息
+        """
+        if not acct:
+            return Rsp(code=1,message='账号不允许为空')
+        if not nick_name:
+            return Rsp(code=1,message='用户昵称不允许为空')
+
+    def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)-> Rsp | None:
+        """检查必填字段是否
+
+        Args:
+            db:Session 数据库会话对象
+            acct:str 账号
+            phone:str 手机号
+            except_id:int 需排除的ID,用于修改数据
+        
+        Returns:
+            Success:None 成功
+            Failed:Rsp 返回错误信息
+        """
+
+        # 逻辑删除用户不在范围内
+        base_stmt = select(User.id).where(User.deleted == False)
+
+        # 需被排除的用户
+        if except_id:
+            base_stmt = base_stmt.where(User.id != except_id)
+
+
+        # 唯一性判断条件
+        rules = [
+            ('账号已被使用',and_(User.acct==acct,User.acct !='')),
+            ('手机号已被使用',and_(User.phone == phone, User.phone != '')),
+        ]
+
+        # 唯一性检测
+        for errmsg, condition in rules:
+            stmt = base_stmt.where(condition)
+            if self.orm_counts(db,stmt) > 0:
+                return Rsp(code=1,message=errmsg)
+
+    def create_user(self,db:Session,c_id:int,data:UserCreate) -> Rsp:
+        """创建用户
+        """
+        u = User(**data.model_dump(),c_id=c_id,u_id=c_id)
+
+        # 数据完整性检测
+        chk_funcs = [
+            # 必填字段
+            self.chk_required_field(data.acct,data.nick_name),
+            # 唯一性检测
+            self.chk_user_unique(db,data.acct,data.phone),
+        ]
+
+        try:
+            # 数据完整性检测
+            for result in chk_funcs:
+                if result:
+                    return result
+
+            db.add(u)
+            db.flush()
+
+            # 默认密码 hash加密后存入数据库
+            default_passwd = settings.config['default_passwd']
+            hash_passwd = hash_api.hash_text(default_passwd)
+
+            # 认证信息
+            a = UserAuth(user_id=u.id, type=AuthType.PASSWORD.value,value=hash_passwd,c_id=c_id,u_id=c_id)
+            db.add(a)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise RspError(data=f'{e}')
+
+        return Rsp()
+
+    def update_user(self,db:Session,u_id:int,data:UserUpdate)->Rsp:
+        """修改用户信息
+        """
+        # 不允许操作系统初始用户
+        if data.id == 1:
+            return Rsp(code=1,message='系统初始用户不可操作')
+
+        # 数据完整性检测
+        chk_funcs = [
+            # 必填字段
+            self.chk_required_field(data.acct,data.nick_name),
+            # 唯一性检测
+            self.chk_user_unique(db,data.acct,data.phone,data.id),
+        ]
+
+        try:
+            # 监测必填字段,是否唯一
+            for result in chk_funcs:
+                if result:
+                    return result
+                
+            now = datetime.now()
+            stmt = update(User).where(User.id == data.id).values(
+                nick_name=data.nick_name,real_name=data.real_name,phone=data.phone,status=data.status,
+                u_dt=now,u_id=u_id)
+            db.execute(stmt)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise RspError(data=f'{e}')
+
+        return Rsp()
+
+    def delete_user(self,db:Session,u_id:int,data:UserDelete)->Rsp:
+        """删除用户信息
+        """
+
+        # 不允许操作系统初始用户
+        if data.id == 1:
+            return Rsp(code=1,message='系统初始用户不可操作')
+        
+        try:
+            now = datetime.now()
+            for stmt in [
+                # 物理删除该用户的认证信息
+                delete(UserAuth).where(UserAuth.user_id == data.id),
+                # 逻辑删除用户的基础信息
+                update(User).where(User.id == data.id).values(deleted=True,u_id = u_id, phone='',u_dt=now)]:
+                db.execute(stmt)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise RspError(data=f'{e}')
+        
+        return Rsp()
+
+    def get_user_list(self,db:Session,data:UserList) -> Rsp:
+        """获取用户列表信息
+        """
+        b_user=alias(User)
+        stmt = select(
+            User.id,User.acct,User.nick_name,User.phone,User.status,User.u_dt,
+            b_user.c.nick_name.label('u_nick_name'),
+            b_user.c.real_name.label('u_real_name'),
+        ).join_from(User,b_user, and_(User.u_id == b_user.c.id,User.deleted == False)
+        ).order_by(User.c_dt.desc())
+
+        if data.status != None:
+            stmt = stmt.where(User.status == data.status)
+
+        if data.nick_name:
+            stmt = stmt.where(User.nick_name.contains(data.nick_name))
+
+        if data.phone:
+            stmt = stmt.where(User.phone.contains(data.phone))
+
+        try:
+            result = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size)
+        except Exception as e:
+            raise RspError(data=f'{e}')
+
+        return Rsp(data=result)
+
+    def get_user_detail(self,db:Session,id:int)->Rsp:
+        """获取用户详情
+        """
+        stmt = select(User.id,User.nick_name,User.real_name,User.phone,User.status).where(and_(User.deleted==False,User.id == id))
+        try:
+            result = self.orm_one(stmt)
+        except Exception as e:
+            raise RspError(data=f'{e}')
+        return Rsp(data=result)
+
+    def password_login(self,db:Session,data:PasswordLogin)->Rsp:
+        """密码认证登录
+        """
+
+        try:
+            plain_text = hash_api.decrypt(data.passwd)
+        except Exception as e:
+            raise RspError(400,'解密用户密码失败',f'{e}')
+        
+        stmt = select(User.id,
+                      User.nick_name,
+                      User.avatar,
+                      User.status,
+                      UserAuth.value).join_from(
+            User,UserAuth,
+            and_(
+                User.id == UserAuth.user_id,
+                User.deleted == False,
+                UserAuth.type == AuthType.PASSWORD.value
+            )
+        ).where(
+            User.acct == data.acct
+        )
+
+        try:
+            result = self.orm_one(db,stmt)
+
+            if not result or hash_api.verifty(plain_text,result['value']) == False:
+                return Rsp(code=1,message='账号或密码错误')
+        
+            if result['status'] != UserStatus.ENABLE.value:
+                return Rsp(code=1,message='该账户已被停用')
+            
+            jwt = jwt_api.encode(id=result['id'])
+            result['jwt'] =jwt
+
+            # 认证密码不返回
+            result.pop('value')
+
+        except Exception as e:
+            raise RspError(data=f'{e}')
+        
+        return Rsp(data=result)
+    
+
+user_api = UserAPI()
