@@ -18,6 +18,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     id:int
+    acct:str
     nick_name:str
     real_name:str = ''
     phone:str = ''
