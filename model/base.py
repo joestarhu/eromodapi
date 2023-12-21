@@ -6,6 +6,8 @@ from eromodapi.config.settings import settings #noqa
 engine = create_engine(settings.config['mysql'],echo=False)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
+
+
 class ModelBase(DeclarativeBase):
     """通用Model字段
     """
@@ -14,3 +16,6 @@ class ModelBase(DeclarativeBase):
     u_id:M[int]=mc(BigInteger,nullable=True,comment='更新数据的用户ID')
     c_dt:M[datetime] =mc(DateTime,default=datetime.now(),comment='创建数据的时间')
     u_dt:M[datetime] =mc(DateTime,default=datetime.now(),comment='修改数据的时间')
+
+
+# ModelBase.metadata.create_all(engine)
