@@ -2,9 +2,9 @@ from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
-
 from eromodapi.config.settings import settings,hash_api,jwt_api,AuthType,UserStatus #noqa
-from eromodapi.model.user import User,UserAuth #noqa
+from eromodapi.model.usercenter import User,UserAuth #noqa
+# from eromodapi.model.user import User,UserAuth #noqa
 from eromodapi.schema.base import ORMBase,Rsp,RspError,Pagination #noqa
 
 
@@ -12,7 +12,7 @@ class UserCreate(BaseModel):
     acct:str
     nick_name:str
     real_name:str = ''
-    phone:str = ''
+    phone:str|None = None
     status:int = UserStatus.ENABLE.value
     avatar:str = ''
 
@@ -21,7 +21,7 @@ class UserUpdate(BaseModel):
     acct:str
     nick_name:str
     real_name:str = ''
-    phone:str = ''
+    phone:str|None = None
     status:int = 1
     avatar:str = ''
 
@@ -40,8 +40,8 @@ class PasswordLogin(BaseModel):
 
 
 class UserAPI(ORMBase):
-    def jwt_decode(self,token:str)->dict:
-        """jwt token解码
+    def jwt_decode(self,db:Session,token:str)->dict:
+        """JWT token解码, 获取用户信息,权限等内容
 
         Args:
             token:str jwt字符串
@@ -50,6 +50,18 @@ class UserAPI(ORMBase):
             data = jwt_api.decode(token)
         except Exception as e:
             raise RspError(401,'无效的用户token',f'{e}')
+        
+        stmt = select(User.status).where(and_(User.id == data['user_id'],User.deleted==False))
+        result = self.orm_all(db,stmt)
+        
+        # 无数据或用户已处于禁用状态,不可继续执行
+        if len(result) == 0:
+            raise RspError(401,'账号已被删除')
+        
+        # 用户禁用状态,不允许继续执行
+        if result[0]['status'] == UserStatus.DISABLE:
+            raise RspError(401,'账号已被禁用')
+
         return data
     
     def chk_required_field(self,acct:str,nick_name:str) -> Rsp | None:
@@ -105,6 +117,10 @@ class UserAPI(ORMBase):
     def create_user(self,db:Session,c_id:int,data:UserCreate) -> Rsp:
         """创建用户
         """
+
+        if data.phone == '':
+            data.phone = None
+
         u = User(**data.model_dump(),c_id=c_id,u_id=c_id)
 
         # 数据完整性检测
@@ -144,6 +160,9 @@ class UserAPI(ORMBase):
         # 不允许操作系统初始用户
         if data.id == 1:
             return Rsp(code=1,message='系统初始用户不可操作')
+        
+        if data.phone == '':
+            data.phone = None
 
         # 数据完整性检测
         chk_funcs = [
@@ -184,8 +203,8 @@ class UserAPI(ORMBase):
             for stmt in [
                 # 物理删除该用户的认证信息
                 delete(UserAuth).where(UserAuth.user_id == data.id),
-                # 逻辑删除用户的基础信息
-                update(User).where(User.id == data.id).values(deleted=True,u_id = u_id, phone='',u_dt=now)]:
+                # 逻辑删除用户的基础信息,释放账号和手机号,可供其他账号使用
+                update(User).where(User.id == data.id).values(deleted=True,u_id = u_id, acct=None,phone=None,u_dt=now)]:
                 db.execute(stmt)
             db.commit()
         except Exception as e:
@@ -214,21 +233,14 @@ class UserAPI(ORMBase):
         if data.phone:
             stmt = stmt.where(User.phone.contains(data.phone))
 
-        try:
-            result = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size)
-        except Exception as e:
-            raise RspError(data=f'{e}')
-
-        return Rsp(data=result)
+        data = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size)
+        return Rsp(data=data)
 
     def get_user_detail(self,db:Session,id:int)->Rsp:
         """获取用户详情
         """
         stmt = select(User.id,User.acct,User.nick_name,User.real_name,User.phone,User.status).where(and_(User.deleted==False,User.id == id))
-        try:
-            result = self.orm_one(db,stmt)
-        except Exception as e:
-            raise RspError(data=f'{e}')
+        result = self.orm_one(db,stmt)
         return Rsp(data=result)
 
     def password_login(self,db:Session,data:PasswordLogin)->Rsp:
@@ -255,19 +267,15 @@ class UserAPI(ORMBase):
             User.acct == data.acct
         )
 
-        try:
-            result = self.orm_one(db,stmt)
+        result = self.orm_one(db,stmt)
 
-            if not result or hash_api.verifty(plain_text,result['value']) == False:
-                return Rsp(code=1,message='账号或密码错误')
+        if not result or hash_api.verifty(plain_text,result['value']) == False:
+            return Rsp(code=1,message='账号或密码错误')
         
-            if result['status'] != UserStatus.ENABLE.value:
-                return Rsp(code=1,message='该账户已被停用')
+        if result['status'] != UserStatus.ENABLE.value:
+            return Rsp(code=1,message='该账户已被停用')
             
-            jwt = jwt_api.encode(id=result['id'])
-
-        except Exception as e:
-            raise RspError(data=f'{e}')
+        jwt = jwt_api.encode(user_id=result['id'])
         
         return Rsp(data=dict(jwt=jwt))
     
