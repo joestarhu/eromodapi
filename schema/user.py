@@ -52,19 +52,21 @@ class UserAPI(ORMBase):
             raise RspError(401,'无效的用户token',f'{e}')
         
         stmt = select(User.status).where(and_(User.id == data['user_id'],User.deleted==False))
-        result = self.orm_all(db,stmt)
-        
+        result = self.orm_one(db,stmt)
+
         # 无数据或用户已处于禁用状态,不可继续执行
-        if len(result) == 0:
-            raise RspError(401,'账号已被删除')
+        if not result:
+            raise RspError(401,'账号不存在')
         
         # 用户禁用状态,不允许继续执行
-        if result[0]['status'] == UserStatus.DISABLE:
+        if result['status'] == UserStatus.DISABLE:
             raise RspError(401,'账号已被禁用')
+        
+        # 获取角色信息
 
         return data
     
-    def chk_required_field(self,acct:str,nick_name:str) -> Rsp | None:
+    def chk_required_field(self,acct:str,nick_name:str)->Rsp|None:
         """检查必填字段是否
 
         Args:
@@ -80,7 +82,7 @@ class UserAPI(ORMBase):
         if not nick_name:
             return Rsp(code=1,message='用户昵称不允许为空')
 
-    def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)-> Rsp | None:
+    def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)->Rsp|None:
         """检查必填字段是否
 
         Args:
@@ -114,7 +116,7 @@ class UserAPI(ORMBase):
             if self.orm_counts(db,stmt) > 0:
                 return Rsp(code=1,message=errmsg)
 
-    def create_user(self,db:Session,c_id:int,data:UserCreate) -> Rsp:
+    def create_user(self,db:Session,c_id:int,data:UserCreate)->Rsp:
         """创建用户
         """
 
@@ -213,7 +215,7 @@ class UserAPI(ORMBase):
         
         return Rsp()
 
-    def get_user_list(self,db:Session,data:UserList) -> Rsp:
+    def get_user_list(self,db:Session,data:UserList)->Rsp:
         """获取用户列表信息
         """
         b_user=alias(User)
@@ -221,8 +223,7 @@ class UserAPI(ORMBase):
             User.id,User.acct,User.nick_name,User.phone,User.status,User.u_dt,
             b_user.c.nick_name.label('u_nick_name'),
             b_user.c.real_name.label('u_real_name'),
-        ).join_from(User,b_user, and_(User.u_id == b_user.c.id,User.deleted == False)
-        ).order_by(User.c_dt.desc())
+        ).join_from(User,b_user, and_(User.u_id == b_user.c.id,User.deleted == False))
 
         if data.status != None:
             stmt = stmt.where(User.status == data.status)
@@ -233,13 +234,13 @@ class UserAPI(ORMBase):
         if data.phone:
             stmt = stmt.where(User.phone.contains(data.phone))
 
-        data = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size)
-        return Rsp(data=data)
+        data = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[User.c_dt.desc()])
+        return Rsp(data=data) 
 
     def get_user_detail(self,db:Session,id:int)->Rsp:
         """获取用户详情
         """
-        stmt = select(User.id,User.acct,User.nick_name,User.real_name,User.phone,User.status).where(and_(User.deleted==False,User.id == id))
+        stmt = select(User.id,User.acct,User.nick_name,User.real_name,User.phone,User.status,User.avatar).where(and_(User.deleted==False,User.id == id))
         result = self.orm_one(db,stmt)
         return Rsp(data=result)
 
@@ -278,6 +279,6 @@ class UserAPI(ORMBase):
         jwt = jwt_api.encode(user_id=result['id'])
         
         return Rsp(data=dict(jwt=jwt))
-    
+
 
 user_api = UserAPI()

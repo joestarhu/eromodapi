@@ -2,7 +2,7 @@ from math import ceil
 from typing import Any, Dict
 from pydantic import BaseModel
 from fastapi import HTTPException
-from sqlalchemy import select,func
+from sqlalchemy import select,func,Select
 from sqlalchemy.orm.session import Session
 
 class Rsp(BaseModel):
@@ -28,28 +28,47 @@ class Pagination(BaseModel):
 
 
 
+
+def orm_wrapper(func):
+    def wrapper(*args,**kw):
+        try:
+            return func(*args,**kw)
+        except Exception as e:
+            raise RspError(data=f'{e}')
+    return wrapper  
+
+
 class ORMBase:
-    def orm_counts(self,db:Session,stmt) -> int:
-        """根据执行的SQL语句,查询数量
-        """
-        total_stmt = select(func.count("1")).select_from(stmt.subquery())
-        return db.scalar(total_stmt)
-        
-    def orm_one(self,db:Session,stmt)->dict:
+    @orm_wrapper
+    def orm_one(self,db:Session,stmt:Select)->dict:
         """获取第一行数据
         """
-        data = db.execute(stmt).mappings().first()
-        if data:
-            data = dict(data)
-        return data
+        result = db.execute(stmt).mappings().first()
+        return result if None == result else dict(result)
 
-    def orm_all(self,db:Session,stmt)->dict:
-        """查询所有数据
+    @orm_wrapper
+    def orm_all(self,db:Session,stmt:Select)->dict:
+        """获取所有数据
         """
         result = db.execute(stmt).mappings()
-        return [dict(**v) for v in result]
+        return [dict(**r) for r in result]
     
-    def orm_pagination(self,db:Session,stmt,page_idx:int=1,page_size:int=10)->dict:
+    @orm_wrapper
+    def counts(self,db:Session,stmt:Select)->int:
+        """获取数量
+        """
+        return 0
+    
+    @orm_wrapper
+    def orm_counts(self,db:Session,stmt:Select) -> int:
+        """根据执行的SQL语句,查询数量
+        """
+        total_stmt = stmt.with_only_columns(func.count("1"))
+        return db.scalar(total_stmt)
+
+
+    @orm_wrapper
+    def orm_pagination(self,db:Session,stmt:Select,page_idx:int=1,page_size:int=10,order:list=None)->dict: 
         """分页查询数据
         """
         # 至少查询1条数据
@@ -70,10 +89,16 @@ class ORMBase:
 
         pagination = dict(page_idx=page_idx, page_size=page_size,
                         page_total=page_total, total=total)
+    
+        # 配置排序条件
+        if order:
+            stmt = stmt.order_by(*order)
 
-        # 获取分页数据
+        # 配置分页条件
         stmt = stmt.offset(offset).limit(page_size)
-        records = self.orm_all(db, stmt)
 
-        return dict(records=records, pagination=pagination)
+        records = self.orm_all(db, stmt)
+        data=dict(records=records, pagination=pagination)
+        
+        return data
     
