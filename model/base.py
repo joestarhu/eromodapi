@@ -7,15 +7,15 @@ engine = create_engine(settings.config['mysql'],echo=False)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
-
 class ModelBase(DeclarativeBase):
     """通用Model字段
     """
     id:M[int] = mc(BigInteger,primary_key=True,autoincrement=True,comment='ID')
-    c_id:M[int]=mc(BigInteger,nullable=True,comment='创建数据的用户ID')
-    u_id:M[int]=mc(BigInteger,nullable=True,comment='更新数据的用户ID')
-    c_dt:M[datetime] =mc(DateTime,default=datetime.now(),comment='创建数据的时间')
-    u_dt:M[datetime] =mc(DateTime,default=datetime.now(),comment='修改数据的时间')
+    c_id:M[int]= mc(BigInteger,nullable=True,comment='创建数据的用户ID')
+    u_id:M[int]= mc(BigInteger,nullable=True,comment='更新数据的用户ID')
+    c_dt:M[datetime] = mc(DateTime,default=datetime.now(),comment='创建数据的时间')
+    u_dt:M[datetime] = mc(DateTime,default=datetime.now(),comment='修改数据的时间')
 
 
 # ModelBase.metadata.create_all(engine)
+# ModelBase.metadata.drop_all(engine)
