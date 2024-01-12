@@ -4,8 +4,7 @@ from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
 from eromodapi.config.settings import settings,hash_api,jwt_api,AuthType,UserStatus #noqa
 from eromodapi.model.usercenter import User,UserAuth #noqa
-# from eromodapi.model.user import User,UserAuth #noqa
-from eromodapi.schema.base import ORMBase,Rsp,RspError,Pagination #noqa
+from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
 
 class UserCreate(BaseModel):
@@ -39,7 +38,7 @@ class PasswordLogin(BaseModel):
 
 
 
-class UserAPI(ORMBase):
+class UserAPI:
     def jwt_decode(self,db:Session,token:str)->dict:
         """JWT token解码, 获取用户信息,权限等内容
 
@@ -52,7 +51,7 @@ class UserAPI(ORMBase):
             raise RspError(401,'无效的用户token',f'{e}')
         
         stmt = select(User.status).where(and_(User.id == data['user_id'],User.deleted==False))
-        result = self.orm_one(db,stmt)
+        result = ORM.one(db,stmt)
 
         # 无数据或用户已处于禁用状态,不可继续执行
         if not result:
@@ -113,13 +112,12 @@ class UserAPI(ORMBase):
         # 唯一性检测
         for errmsg, condition in rules:
             stmt = base_stmt.where(condition)
-            if self.orm_counts(db,stmt) > 0:
+            if ORM.counts(db,stmt) > 0 :
                 return Rsp(code=1,message=errmsg)
 
     def create_user(self,db:Session,c_id:int,data:UserCreate)->Rsp:
         """创建用户
         """
-
         if data.phone == '':
             data.phone = None
 
@@ -234,14 +232,14 @@ class UserAPI(ORMBase):
         if data.phone:
             stmt = stmt.where(User.phone.contains(data.phone))
 
-        data = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[User.c_dt.desc()])
+        data = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[User.c_dt.desc()])
         return Rsp(data=data) 
 
     def get_user_detail(self,db:Session,id:int)->Rsp:
         """获取用户详情
         """
         stmt = select(User.id,User.acct,User.nick_name,User.real_name,User.phone,User.status,User.avatar).where(and_(User.deleted==False,User.id == id))
-        result = self.orm_one(db,stmt)
+        result = ORM.one(db,stmt)        
         return Rsp(data=result)
 
     def password_login(self,db:Session,data:PasswordLogin)->Rsp:
@@ -268,7 +266,7 @@ class UserAPI(ORMBase):
             User.acct == data.acct
         )
 
-        result = self.orm_one(db,stmt)
+        result = ORM.one(db,stmt)      
 
         if not result or hash_api.verifty(plain_text,result['value']) == False:
             return Rsp(code=1,message='账号或密码错误')
