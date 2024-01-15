@@ -30,3 +30,7 @@ def get_list(*,user=Depends(get_user),page_idx:int=1,page_size:int=10,nick_name:
 @api.get('/detail',summary='获取用户详情')
 def get_list(*,user=Depends(get_user),id:int):
     return user_api.get_user_detail(user['db'],id)
+
+@api.get('/login_user',summary='获取登录用户信息')
+def get_login_user(*,user=Depends(get_user)):
+    return user_api.get_user_detail(user['db'],user['id'])
