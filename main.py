@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from eromodapi.config.settings import settings #noqa
-from eromodapi.api import user
+from eromodapi.api import user,role,org
 
 
 app = FastAPI()
@@ -18,3 +18,6 @@ app.add_middleware(
 
 
 app.include_router(user.api,tags=['统一用户中心'])
+app.include_router(org.api,tags=['统一用户中心'])
+# app.include_router(role.api,tags=['统一用户中心'])
+

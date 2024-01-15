@@ -1,4 +1,4 @@
-from sqlalchemy import String,Integer,BigInteger,Boolean,UniqueConstraint,ForeignKey
+from sqlalchemy import String,Integer,BigInteger,Boolean,UniqueConstraint,ForeignKey,DateTime
 from sqlalchemy.orm import mapped_column as mc, Mapped as M
 from eromodapi.model.base import ModelBase #noqa
 
@@ -17,6 +17,7 @@ class User(ModelBase):
     avatar:M[str] = mc(String(1024), default='', comment='用户头像url地址')
     deleted:M[bool] = mc(Boolean, default=False, comment='逻辑数据删除标志,逻辑删除时,将账号和手机号置为null')
 
+
 class UserAuth(ModelBase):
     __tablename__ = 't_user_auth'
     __table_args__ = (
@@ -25,52 +26,84 @@ class UserAuth(ModelBase):
     )
 
     user_id:M[int] = mc(ForeignKey("t_user.id", ondelete='cascade'), comment='用户ID')
-    type:M[int] =mc(Integer,default=0,comment='鉴权类型,如密码,微信,钉钉等')
+    type:M[int] = mc(Integer,default=0,comment='鉴权类型,如密码,微信,钉钉等')
     appid:M[str] = mc(String(256),default='',comment='鉴权类型的appid,比如微信的小程序ID,钉钉的H5应用ID')
     value:M[str] = mc(String(256),default='',comment='鉴权值,比如密码或其他身份标识')
+
+
 
 class Org(ModelBase):
     __tablename__ = 't_org'
     __table_args__ = (
-        UniqueConstraint('name', 'parent',  name='uni_org'),
-        {'comment': '组织信息'}
+        UniqueConstraint('name','root_id',name='uni_org'),
+        {'comment': '组织部门信息'}
     )
 
-    name:M[str] = mc(String(64),default='',comment='组织名')
-    parent:M[int] = mc(BigInteger,nullable=True,comment='所属父节点')
+    name:M[str] = mc(String(64),nullable=True,comment='组织部门名')
+    root_id:M[int] = mc(BigInteger,nullable=True,comment='所属根节点ID')
     remark:M[str] = mc(String(512),default='',comment='备注信息')
     deleted:M[bool] = mc(Boolean, default=False, comment='逻辑数据删除标志')
 
-class OrgUser(ModelBase):
-    __tablename__ = 't_org_user'
-    __table_args__ = (
-        UniqueConstraint('user_id', 'org_id',  name='uni_org_user'),
-        {'comment': '组织用户信息'}
-    )
+# class UserOrg(ModelBase):
+#     __tablename__ = 't_user_org'
+#     __table_args__ = (
+#         UniqueConstraint('user_id','org_id',name='uni_user_org'),
+#         {'comment':'用户组织信息'}
+#     )
 
-    org_id:M[int] = mc(ForeignKey("t_org.id", ondelete='cascade'), comment='组织ID')
-    user_id:M[int] = mc(ForeignKey("t_user.id", ondelete='cascade'), comment='用户ID')
+#     user_id:M[int] = mc(ForeignKey('t_user.id',ondelete='cascade'),comment='用户ID')
+#     org_id:M[int] = mc(ForeignKey('t_org.id',ondelete='cascade',comment='组织ID'))
 
 
 class Role(ModelBase):
     __tablename__ = 't_role'
     __table_args__ = (
-        UniqueConstraint('name', 'org_id',  name='uni_role'),
+        UniqueConstraint('name','org_id',name='uni_role'),
         {'comment': '角色信息'}
     )
 
     name:M[str] = mc(String(64),default='',comment='角色名')
-    org_id:M[int] = mc(ForeignKey("t_org.id", ondelete='cascade'), comment='组织ID')
+    org_id:M[int] = mc(ForeignKey('t_org.id',ondelete='cascade'),comment='角色所属组织ID')
     remark:M[str] = mc(String(512),default='',comment='备注信息')
     status:M[int] = mc(Integer, default=1, comment='角色状态 0:停用,1:启用') 
 
 
-class RoleUser(ModelBase):
-    __tablename__ = 't_role_user'
+class UserRole(ModelBase):
+    __tablename__ = 't_user_role'
     __table_args__ = (
-        UniqueConstraint('user_id', 'role_id',  name='uni_role_user'),
-        {'comment': '角色用户信息'}
-    )    
+        UniqueConstraint('user_id','role_id',name='uni_user_role'),
+        {'comment':'用户角色信息'}
+    )
+    
+    user_id:M[int] = mc(ForeignKey('t_user.id',ondelete='cascade'),comment='用户ID')
+    role_id:M[int] = mc(ForeignKey('t_role.id',ondelete='cascade'),comment='角色ID')
 
-    role_id:M[int] = mc(ForeignKey("t_role.id", ondelete='cascade'), comment='角色ID')
-    user_id:M[int] = mc(ForeignKey("t_user.id", ondelete='cascade'), comment='用户ID')
+class Service(ModelBase):
+    __tablename__ = 't_service'
+    __table_args__ = (
+        {'comment':'应用服务信息'}
+    )
+
+    name:M[str] = mc(String(64),comment='应用服务名称')
+    remark:M[str] = mc(String(512),comment='备注')
+
+class ServiceAuth(ModelBase):
+    __tablename__ = 't_service_auth'
+    __table_args__ = (
+        {'comment':'应用服务授权信息'}
+    )
+
+    service_id:M[int] = mc(ForeignKey('t_service.id',ondelete='cascade'),comment='应用服务ID')
+    auth_type:M[int] = mc(Integer,default=1,comment='授权类型;0:个人,1:组织')
+    auth_id:M[int] = mc(BigInteger,comment='授权对象ID')
+    auth_expire_time = mc(DateTime, comment='授权截止日期')
+
+class ServiceRole(ModelBase):
+    __tablename__ = 't_service_role'
+    __table_args__ = (
+        {'comment':'应用服务角色信息'}
+    )
+
+    service_id:M[int] = mc(ForeignKey('t_service.id',ondelete='cascade'),comment='应用服务ID')
+    role_id:M[int] = mc(ForeignKey('t_role.id',ondelete='cascade'),comment='角色ID')
+    data_scope:M[int] = mc(Integer,default=0,comment='数据权限;0:本人,1:本部门,2:本部门及以下,3:本组织')

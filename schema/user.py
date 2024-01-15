@@ -1,4 +1,3 @@
-from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
@@ -121,7 +120,8 @@ class UserAPI:
         if data.phone == '':
             data.phone = None
 
-        u = User(**data.model_dump(),c_id=c_id,u_id=c_id)
+        insert_info = ORM.insert_info(c_id)
+        u = User(**data.model_dump(),**insert_info)
 
         # 数据完整性检测
         chk_funcs = [
@@ -145,7 +145,7 @@ class UserAPI:
             hash_passwd = hash_api.hash_text(default_passwd)
 
             # 认证信息
-            a = UserAuth(user_id=u.id, type=AuthType.PASSWORD.value,value=hash_passwd,c_id=c_id,u_id=c_id)
+            a = UserAuth(user_id=u.id, type=AuthType.PASSWORD.value,value=hash_passwd,**insert_info)
             db.add(a)
             db.commit()
         except Exception as e:
@@ -178,10 +178,10 @@ class UserAPI:
                 if result:
                     return result
                 
-            now = datetime.now()
+            update_info = ORM.update_info(u_id)
             stmt = update(User).where(User.id == data.id).values(
                 nick_name=data.nick_name,real_name=data.real_name,phone=data.phone,status=data.status,
-                u_dt=now,u_id=u_id)
+                **update_info)
             db.execute(stmt)
             db.commit()
         except Exception as e:
@@ -199,12 +199,12 @@ class UserAPI:
             return Rsp(code=1,message='系统初始用户不可操作')
         
         try:
-            now = datetime.now()
+            update_info = ORM.update_info(u_id)
             for stmt in [
                 # 物理删除该用户的认证信息
                 delete(UserAuth).where(UserAuth.user_id == data.id),
                 # 逻辑删除用户的基础信息,释放账号和手机号,可供其他账号使用
-                update(User).where(User.id == data.id).values(deleted=True,u_id = u_id, acct=None,phone=None,u_dt=now)]:
+                update(User).where(User.id == data.id).values(deleted=True,acct=None,phone=None,**update_info)]:
                 db.execute(stmt)
             db.commit()
         except Exception as e:

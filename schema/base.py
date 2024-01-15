@@ -1,3 +1,4 @@
+from datetime import datetime
 from math import ceil
 from typing import Any, Dict,List
 from pydantic import BaseModel
@@ -38,6 +39,20 @@ def orm_wrapper(func):
 
 
 class ORM:
+    @staticmethod
+    def insert_info(id:int)->dict:
+        """
+        """
+        now =datetime.now()
+        return dict(c_id=id,u_id=id,c_dt=now,u_dt=now)
+
+    @staticmethod
+    def update_info(id:int)->dict:
+        """
+        """
+        now =datetime.now()
+        return dict(u_id=id,u_dt=now)
+
     @orm_wrapper
     @staticmethod
     def all(db:Session,stmt:Select)->List[dict]:
