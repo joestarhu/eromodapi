@@ -5,6 +5,7 @@ __pycache__/
 
 .vscode
 *.toml
+.DS_Store
 
 # C extensions
 *.so
