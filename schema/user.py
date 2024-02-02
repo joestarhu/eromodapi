@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
 from eromodapi.config.settings import settings,hash_api,jwt_api,AuthType,UserStatus #noqa
@@ -7,8 +7,8 @@ from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
 
 class UserCreate(BaseModel):
-    acct:str
-    nick_name:str
+    acct:str 
+    nick_name:str 
     real_name:str = ''
     phone:str|None = None
     status:int = UserStatus.ENABLE.value
@@ -42,6 +42,7 @@ class UserAPI:
         """JWT token解码, 获取用户信息,权限等内容
 
         Args:
+            db:Session 数据库会话
             token:str jwt字符串
         """
         try:
@@ -84,7 +85,7 @@ class UserAPI:
         """检查必填字段是否
 
         Args:
-            db:Session 数据库会话对象
+            db:Session 数据库会话
             acct:str 账号
             phone:str 手机号
             except_id:int 需排除的ID,用于修改数据
@@ -116,6 +117,11 @@ class UserAPI:
 
     def create_user(self,db:Session,c_id:int,data:UserCreate)->Rsp:
         """创建用户
+
+        Args:
+            db:Session 数据库会话
+            c_id:int 操作用户ID
+            data:UserCreate 新增用户数据
         """
         if data.phone == '':
             data.phone = None
@@ -141,7 +147,7 @@ class UserAPI:
             db.flush()
 
             # 默认密码 hash加密后存入数据库
-            default_passwd = settings.config['default_passwd']
+            default_passwd = settings.default_passwd
             hash_passwd = hash_api.hash_text(default_passwd)
 
             # 认证信息
@@ -172,22 +178,14 @@ class UserAPI:
             self.chk_user_unique(db,data.acct,data.phone,data.id),
         ]
 
-        try:
-            # 监测必填字段,是否唯一
-            for result in chk_funcs:
-                if result:
-                    return result
-                
-            update_info = ORM.update_info(u_id)
-            stmt = update(User).where(User.id == data.id).values(
-                nick_name=data.nick_name,real_name=data.real_name,phone=data.phone,status=data.status,
-                **update_info)
-            db.execute(stmt)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            raise RspError(data=f'{e}')
+        # 监测必填字段,是否唯一
+        for result in chk_funcs:
+            if result:
+                return result
 
+        update_info = ORM.update_info(u_id)
+        stmt = update(User).where(User.id == data.id).values(nick_name=data.nick_name,real_name=data.real_name,phone=data.phone,status=data.status,**update_info)
+        ORM.commit(db,stmt)
         return Rsp()
 
     def delete_user(self,db:Session,u_id:int,data:UserDelete)->Rsp:
@@ -210,7 +208,7 @@ class UserAPI:
         except Exception as e:
             db.rollback()
             raise RspError(data=f'{e}')
-        
+
         return Rsp()
 
     def get_user_list(self,db:Session,data:UserList)->Rsp:

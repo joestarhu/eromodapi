@@ -3,7 +3,7 @@ from sqlalchemy import BigInteger,DateTime,create_engine
 from sqlalchemy.orm import DeclarativeBase,sessionmaker, mapped_column as mc, Mapped as M
 from eromodapi.config.settings import settings #noqa
 
-engine = create_engine(settings.config['mysql'],echo=False)
+engine = create_engine(settings.db_rds,echo=False)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

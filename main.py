@@ -1,23 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from eromodapi.config.settings import settings #noqa
-from eromodapi.api import user,role,org
+from eromodapi.api import user,org
 
+def init_application()->FastAPI:
+    """初始化FastAPI对象
+    """
 
-app = FastAPI()
+    app = FastAPI(**settings.fastapi_kwargs)
 
+    # 跨域设定CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# 跨域设定CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    app.include_router(user.api,tags=['统一用户中心'])
+    app.include_router(org.api,tags=['统一用户中心'])
 
+    return app
 
-app.include_router(user.api,tags=['统一用户中心'])
-app.include_router(org.api,tags=['统一用户中心'])
-# app.include_router(role.api,tags=['统一用户中心'])
-
+app = init_application()
