@@ -28,6 +28,7 @@ class OrgDelete(BaseModel):
 
 class OrgList(Pagination):
     name:str = ''
+    status:int|None = None
 
 
 
@@ -74,10 +75,12 @@ class OrgAPI():
             return Rsp(code=1,message='系统初始组织不可操作')
         
         condtion = and_(Org.id == data.id, Org.deleted == False)
-
         stmt = select(Org.id).where(condtion)
         if ORM.counts(db,stmt) == 0:
             return Rsp(code=1,message='不存在该组织')
+
+        if rsp := self.chk_org_unique(db,name=data.name,except_id=data.id):
+            return rsp
 
         update_info = ORM.update_info(c_id)
         stmt = update(Org).where(condtion).values(**data.model_dump(exclude_unset=True),**update_info)
@@ -92,7 +95,7 @@ class OrgAPI():
             return Rsp(code=1,message='系统初始组织不可操作')
 
         update_info = ORM.update_info(c_id)
-        stmt = update(Org).where(Org.id == data.id).values(deleted=True,**update_info)
+        stmt = update(Org).where(Org.id == data.id).values(name=None,deleted=True,**update_info)
         ORM.commit(db,stmt)
         
         return Rsp()
@@ -111,6 +114,9 @@ class OrgAPI():
             owner_user,Org.owner_id == owner_user.c.id
         )
 
+        if data.status != None:
+            stmt = stmt.where(Org.status == data.status)
+
         if data.name != '':
             stmt = stmt.where(Org.name.contains(data.name))
 
@@ -120,7 +126,7 @@ class OrgAPI():
     def get_org_detail(self,db:Session,id:int)->Rsp:
         """获取详情
         """
-        stmt = select(Org.id,Org.owner_id,Org.name,Org.remark).where(and_(Org.deleted == False,Org.id == id))
+        stmt = select(Org.id,Org.owner_id,Org.name,Org.status,Org.remark).where(and_(Org.deleted == False,Org.id == id))
         result = ORM.one(db,stmt)
         return Rsp(data=result)
 
