@@ -1,6 +1,6 @@
 from fastapi import APIRouter,Depends,Query
 from eromodapi.schema.user import user_api,UserCreate,UserUpdate,UserDelete,UserList,PasswordLogin #noqa
-from eromodapi.api.base import get_db,get_user #noqa
+from eromodapi.api.base import get_db,get_user,get_page #noqa
 
 api = APIRouter(prefix='/user')
 
@@ -25,8 +25,8 @@ def delete(*,user=Depends(get_user),data:UserDelete):
 
 
 @api.get('/list',summary='获取用户列表数据')
-def get_list(*,user=Depends(get_user),page_idx:int=1,page_size:int=10,nick_name:str=None,phone:str=None,status:int=None):
-    data = UserList(page_idx=page_idx,page_size=page_size,nick_name=nick_name,phone=phone,status=status)
+def get_list(*,user=Depends(get_user),page=Depends(get_page),nick_name:str=Query(default=None,description='用户昵称'),phone:str=Query(default=None,description='手机号'),status:int=Query(default=None,description='用户状态')):
+    data = UserList(nick_name=nick_name,phone=phone,status=status,**page)
     return user_api.get_user_list(user['db'],data)
 
 

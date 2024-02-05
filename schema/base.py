@@ -1,16 +1,18 @@
 from datetime import datetime
 from math import ceil
 from typing import Any, Dict,List
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from fastapi import HTTPException
 from sqlalchemy import select,func,Select
 from sqlalchemy.orm.session import Session
 
+from eromodapi.model.base import ModelBase
+
 class Rsp(BaseModel):
     """请求成功返回信息
     """
-    code:int = 0
-    message:str = '成功'
+    code:int = Field(default=0,description='请求结果代码;0表示成功')
+    message:str = Field(default='成功',description='请求结果消息描述')
     data:Any = None
 
 
@@ -25,8 +27,8 @@ class RspError(HTTPException):
 class Pagination(BaseModel):
     """分页请求参数
     """
-    page_idx:int = 1
-    page_size:int = 10
+    page_idx:int = Field(default=1,description='页数ID')
+    page_size:int = Field(default=10,description='每页数量')
 
 
 def orm_wrapper(func):
@@ -40,18 +42,36 @@ def orm_wrapper(func):
 
 class ORM:
     @staticmethod
+    def commit(db:Session,stmt):
+        try:
+            db.execute(stmt)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise RspError(data=f'{e}')
+
+    @staticmethod
     def insert_info(id:int)->dict:
-        """
+        """构建数据新增信息
         """
         now =datetime.now()
         return dict(c_id=id,u_id=id,c_dt=now,u_dt=now)
 
     @staticmethod
     def update_info(id:int)->dict:
-        """
+        """构建数据更新信息
         """
         now =datetime.now()
         return dict(u_id=id,u_dt=now)
+
+
+    @orm_wrapper
+    @staticmethod
+    def unique_chk(db:Session,rules:list,base_stmt)->Rsp|None:
+        for errmsg, condition in rules:
+            stmt = base_stmt.where(condition)
+            if ORM.counts(db,stmt) > 0 :
+                return Rsp(code=1,message=errmsg)
 
     @orm_wrapper
     @staticmethod

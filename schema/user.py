@@ -1,41 +1,47 @@
+from enum import Enum
 from pydantic import BaseModel,Field
 from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
-from eromodapi.config.settings import settings,hash_api,jwt_api,AuthType,UserStatus #noqa
-from eromodapi.model.usercenter import User,UserAuth #noqa
+from eromodapi.config.settings import settings,hash_api,jwt_api #noqa
+from eromodapi.model.user import User,UserAuth,UserSettings #noqa
+# from eromodapi.model.usercenter import User,UserAuth #noqa
 from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
 
+
+# 请求参数
 class UserCreate(BaseModel):
-    acct:str 
-    nick_name:str 
-    real_name:str = ''
-    phone:str|None = None
-    status:int = UserStatus.ENABLE.value
-    avatar:str = ''
+    acct:str = Field(description='账号')
+    nick_name:str = Field(description='昵称')
+    real_name:str = Field(default='',description='实名')
+    phone:str|None = Field(default=None,description='手机号')
+    status:int = Field(default=UserSettings.status_enable,description='状态')
+    avatar:str = Field(default='',description='头像URL')
+
 
 class UserUpdate(BaseModel):
-    id:int
-    acct:str
-    nick_name:str
-    real_name:str = ''
-    phone:str|None = None
-    status:int = 1
-    avatar:str = ''
+    id:int =  Field(description='用户ID')
+    acct:str = Field(description='账号')
+    nick_name:str = Field(description='昵称')
+    real_name:str = Field(default='',description='实名')
+    phone:str|None = Field(default=None,description='手机号')
+    status:int = Field(description='状态')
+    avatar:str = Field(default='',description='头像URL')
+
 
 class UserDelete(BaseModel):
-    id:int
+    id:int =  Field(description='用户ID')
+
+
+class PasswordLogin(BaseModel):
+    acct:str = Field(description='账号')
+    passwd:str= Field(description='密码')
+
 
 class UserList(Pagination):
     nick_name:str | None = None
     phone:str | None = None
     status:int | None = None
-
-class PasswordLogin(BaseModel):
-    acct:str
-    passwd:str
-
-
 
 class UserAPI:
     def jwt_decode(self,db:Session,token:str)->dict:
@@ -58,28 +64,12 @@ class UserAPI:
             raise RspError(401,'账号不存在')
         
         # 用户禁用状态,不允许继续执行
-        if result['status'] == UserStatus.DISABLE:
-            raise RspError(401,'账号已被禁用')
+        if result['status'] != UserSettings.status_enable:
+            raise RspError(401,'账号已被停用')
         
         # 获取角色信息
 
         return data
-    
-    def chk_required_field(self,acct:str,nick_name:str)->Rsp|None:
-        """检查必填字段是否
-
-        Args:
-            acct:str 账号
-            nick_name:str 昵称
-        
-        Returns:
-            Success:None 成功
-            Failed:Rsp 返回错误信息
-        """
-        if not acct:
-            return Rsp(code=1,message='账号不允许为空')
-        if not nick_name:
-            return Rsp(code=1,message='用户昵称不允许为空')
 
     def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)->Rsp|None:
         """检查必填字段是否
@@ -96,7 +86,7 @@ class UserAPI:
         """
 
         # 逻辑删除用户不在范围内
-        base_stmt = select(User.id).where(User.deleted == False)
+        base_stmt = select(1).where(User.deleted == False)
 
         # 需被排除的用户
         if except_id:
@@ -110,10 +100,7 @@ class UserAPI:
         ]
 
         # 唯一性检测
-        for errmsg, condition in rules:
-            stmt = base_stmt.where(condition)
-            if ORM.counts(db,stmt) > 0 :
-                return Rsp(code=1,message=errmsg)
+        return ORM.unique_chk(db,rules,base_stmt)
 
     def create_user(self,db:Session,c_id:int,data:UserCreate)->Rsp:
         """创建用户
@@ -129,29 +116,18 @@ class UserAPI:
         insert_info = ORM.insert_info(c_id)
         u = User(**data.model_dump(),**insert_info)
 
-        # 数据完整性检测
-        chk_funcs = [
-            # 必填字段
-            self.chk_required_field(data.acct,data.nick_name),
-            # 唯一性检测
-            self.chk_user_unique(db,data.acct,data.phone),
-        ]
+        if rsp := self.chk_user_unique(db,data.acct,data.phone):
+            return rsp
 
         try:
-            # 数据完整性检测
-            for result in chk_funcs:
-                if result:
-                    return result
-
             db.add(u)
             db.flush()
-
             # 默认密码 hash加密后存入数据库
             default_passwd = settings.default_passwd
             hash_passwd = hash_api.hash_text(default_passwd)
 
             # 认证信息
-            a = UserAuth(user_id=u.id, type=AuthType.PASSWORD.value,value=hash_passwd,**insert_info)
+            a = UserAuth(user_id=u.id, type=UserSettings.auth_password,value=hash_passwd,**insert_info)
             db.add(a)
             db.commit()
         except Exception as e:
@@ -170,18 +146,8 @@ class UserAPI:
         if data.phone == '':
             data.phone = None
 
-        # 数据完整性检测
-        chk_funcs = [
-            # 必填字段
-            self.chk_required_field(data.acct,data.nick_name),
-            # 唯一性检测
-            self.chk_user_unique(db,data.acct,data.phone,data.id),
-        ]
-
-        # 监测必填字段,是否唯一
-        for result in chk_funcs:
-            if result:
-                return result
+        if rsp := self.chk_user_unique(db,data.acct,data.phone,data.id):
+            return rsp
 
         update_info = ORM.update_info(u_id)
         stmt = update(User).where(User.id == data.id).values(nick_name=data.nick_name,real_name=data.real_name,phone=data.phone,status=data.status,**update_info)
@@ -191,7 +157,6 @@ class UserAPI:
     def delete_user(self,db:Session,u_id:int,data:UserDelete)->Rsp:
         """删除用户信息
         """
-
         # 不允许操作系统初始用户
         if data.id == 1:
             return Rsp(code=1,message='系统初始用户不可操作')
@@ -231,13 +196,14 @@ class UserAPI:
             stmt = stmt.where(User.phone.contains(data.phone))
 
         data = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[User.c_dt.desc()])
+
         return Rsp(data=data) 
 
     def get_user_detail(self,db:Session,id:int)->Rsp:
         """获取用户详情
         """
         stmt = select(User.id,User.acct,User.nick_name,User.real_name,User.phone,User.status,User.avatar).where(and_(User.deleted==False,User.id == id))
-        result = ORM.one(db,stmt)        
+        result = ORM.one(db,stmt)
         return Rsp(data=result)
 
     def password_login(self,db:Session,data:PasswordLogin)->Rsp:
@@ -258,7 +224,7 @@ class UserAPI:
             and_(
                 User.id == UserAuth.user_id,
                 User.deleted == False,
-                UserAuth.type == AuthType.PASSWORD.value
+                UserAuth.type == UserSettings.auth_password
             )
         ).where(
             User.acct == data.acct
@@ -269,7 +235,7 @@ class UserAPI:
         if not result or hash_api.verifty(plain_text,result['value']) == False:
             return Rsp(code=1,message='账号或密码错误')
         
-        if result['status'] != UserStatus.ENABLE.value:
+        if result['status'] != UserSettings.status_enable:
             return Rsp(code=1,message='该账户已被停用')
             
         jwt = jwt_api.encode(user_id=result['id'])

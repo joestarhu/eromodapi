@@ -1,11 +1,12 @@
 from typing import Dict,List,Any
-from enum import Enum
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from jhu.security import HashAPI,JWTAPI
 
 class BaseAppSettings(BaseSettings):
     """应用基础配置项
     """
+
     # FastAPI的应用
     debug:bool = False
     docs_url:str = "/docs"
@@ -18,19 +19,20 @@ class BaseAppSettings(BaseSettings):
     # 安全
     hash_key:str='0f35268f93594811b1fb81e772a9e256'
     jwt_key:str='egw2zoumjUy1nilQ978ERZouywXbmRIQ64DHCDiPNVk'
+    jwt_expire_min:int=60*24*7
     default_passwd:str='qwe321'
 
     # CORS跨域
     allow_origins:List[str] = ["*"]
 
-    # 存储
-    db_rds:str = ''
+    # 数据库存储
+    db_rds:str = 'mysql+pymysql://root:qwe321@localhost:3306/dm'
 
-    class Config:
-        # env文件名
-        env_file=".env"
-        # 额外参数忽略
-        extra='ignore'
+
+    model_config = ConfigDict(
+        env_file='.env',
+        extra = 'ignore'
+    )
 
     @property
     def fastapi_kwargs(self)->Dict[str,Any]:
@@ -41,28 +43,10 @@ class BaseAppSettings(BaseSettings):
             openapi_url=self.openapi_url,
             redoc_url=self.redoc_url,
             title=self.title,
-            version=self.version)
+            version=self.version
+        )
 
 settings = BaseAppSettings()
 hash_api = HashAPI(settings.hash_key)
-jwt_api = JWTAPI(settings.jwt_key,60*24*7)
+jwt_api = JWTAPI(settings.jwt_key,settings.jwt_expire_min)
 
-class AuthType(int,Enum):
-    """用户鉴权认证类型
-
-    PASSWORD:密码
-    DINGTALK:钉钉
-    FEISHU:飞书
-    """
-    PASSWORD=0
-    DINGTALK=1
-    FEISHU=2
-
-class UserStatus(int,Enum):
-    """用户状态
-
-    DISABLE:禁用状态
-    ENABLE:启用状态
-    """
-    DISABLE=0
-    ENABLE=1
