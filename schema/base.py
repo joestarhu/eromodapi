@@ -4,9 +4,8 @@ from typing import Any, Dict,List
 from pydantic import BaseModel,Field
 from fastapi import HTTPException
 from sqlalchemy import select,func,Select
+from sqlalchemy.sql.elements import BinaryExpression
 from sqlalchemy.orm.session import Session
-
-from eromodapi.model.base import ModelBase
 
 class Rsp(BaseModel):
     """请求成功返回信息
@@ -67,7 +66,12 @@ class ORM:
 
     @orm_wrapper
     @staticmethod
-    def unique_chk(db:Session,rules:list,base_stmt)->Rsp|None:
+    def unique_chk(db:Session,rules:list,except_expression:BinaryExpression=None)->Rsp|None:
+        base_stmt = select(1)
+
+        if except_expression:
+            base_stmt = base_stmt.where(except_expression)
+
         for errmsg, condition in rules:
             stmt = base_stmt.where(condition)
             if ORM.counts(db,stmt) > 0 :

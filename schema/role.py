@@ -1,34 +1,87 @@
-from datetime import datetime
 from pydantic import BaseModel
 from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
-# from eromodapi.config.settings import settings,hash_api,jwt_api,AuthType,UserStatus #noqa
-from eromodapi.model.usercenter import User,UserAuth,Role,UserRole,Org #noqa
-from eromodapi.schema.base import ORM,ORMBase,Rsp,RspError,Pagination #noqa
+from eromodapi.model.user import User #noqa
+from eromodapi.model.org import Org #noaa
+from eromodapi.model.role import Role,RoleUser,RoleSettings #noqa
+from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
+
+
+
+class RoleCreate(BaseModel):
+    name:str
+    org_id:int
+    status:int = RoleSettings.status_enable
+    remark:str = ''
+
+class RoleUserCreate(BaseModel):
+    role_id:int
+    user_id:int
+    status:int = RoleSettings.user_status_enable
 
 
 class RoleList(Pagination):
-    name:str | None = None
-    org_id:int | None =None
+    name:str=''
+    org_id:int|None = None
+    status:int|None = None
 
 
-# class RoleAPI(ORMBase):
-#     def get_list(self,db:Session,data:RoleList) -> Rsp:
-#         """获取角色列表
-#         """
-#         stmt = select(Role.id,Role.name,Role.status,Role.type,Role.remark,Role.u_dt,User.nick_name.label('u_nick_name'),Org.name.label('org_name')).join(
-#             User,Role.u_id == User.id,isouter=True
-#         ).join(
-#             Org, Role.org_id == Org.id, isouter=True
-#         )
 
-#         if data.name:
-#             stmt = stmt.where(Role.name.contains(data.name))
+class RoleAPI:
+    def chk_unique(self,db:Session,name:str,org_id:int,except_id:int=None)->Rsp|None:
+        """判断角色是否唯一
+        """
 
-#         if data.org_id != None:
-#             stmt = stmt.where(Role.org_id == data.org_id)
+        if except_id:
+            expression = Role.id == id
+        else:
+            expression = None
 
-#         data = self.orm_pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size)
-#         return Rsp(data=data)
+        rules = [
+            ("角色名已被使用",and_(Role.name == name, Role.org_id == org_id))
+        ]
 
-# role_api = RoleAPI()
+        return ORM.unique_chk(db,rules,expression)
+    
+    def create_role(self,db:Session,c_id:int,data:RoleCreate)->Rsp:
+        """创建角色
+        """
+
+        if rsp := self.chk_unique(db,name=data.name,org_id=data.org_id):
+            return rsp
+
+        # 是否已存在角色
+        create_info = ORM.insert_info(c_id)
+        role = RoleCreate(**data.model_dump(),**create_info)
+        try:
+            db.add(role)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise RspError(500,data=f'{e}')
+
+        return Rsp()
+
+
+
+    def get_list(self,db:Session,data:RoleList)->Rsp:
+        """获取角色列信息
+        """
+        stmt = select(
+            Role.id,Role.name,Role.status,Role.org_id,Role.remark,Role.u_dt,
+            User.nick_name.label('u_nick_name'),
+            User.real_name.label('u_real_name'),
+            Org.name.label('org_name'),
+        ).join(User, Role.u_id == User.id).join(Org, Role.org_id == Org.id)
+
+        if data.name:
+            stmt = stmt.where(Role.name.contains(data.name))
+        
+        if data.status != None:
+            stmt = stmt.where(Role.status == data.status)
+
+        result = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[Role.c_dt.desc()])
+
+        return Rsp(data=result)
+
+role_api = RoleAPI()

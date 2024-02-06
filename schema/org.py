@@ -38,16 +38,17 @@ class OrgAPI():
     def chk_org_unique(self,db:Session,name:str,except_id:int=None)->Rsp|None:
         """判断组织是否重复
         """
-        base_stmt = select(1).where(Org.deleted == False)
 
         if except_id:
-            base_stmt = base_stmt.where(Org.id != except_id)
+            expression = Org.id != except_id
+        else:
+            expression = None
 
         rules = [
-            ('组织名称已被使用',Org.name == name)
+            ('组织名称已被使用',and_(Org.name == name,Org.deleted == False))
         ]
 
-        return ORM.unique_chk(db,rules,base_stmt)
+        return ORM.unique_chk(db,rules,expression)
 
     def create_org(self,db:Session,c_id:int,data:OrgCreate)->Rsp:
         """创建组织

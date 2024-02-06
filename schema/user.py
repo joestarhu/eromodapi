@@ -85,22 +85,20 @@ class UserAPI:
             Failed:Rsp 返回错误信息
         """
 
-        # 逻辑删除用户不在范围内
-        base_stmt = select(1).where(User.deleted == False)
-
         # 需被排除的用户
         if except_id:
-            base_stmt = base_stmt.where(User.id != except_id)
-
+            expression = User.id != except_id
+        else:
+            expression = None
 
         # 唯一性判断条件
         rules = [
-            ('账号已被使用',and_(User.acct==acct,User.acct !='')),
-            ('手机号已被使用',and_(User.phone == phone, User.phone != '')),
+            ('账号已被使用',and_(User.acct==acct,User.acct !='',User.deleted == False)),
+            ('手机号已被使用',and_(User.phone == phone, User.phone != '',User.deleted == False)),
         ]
 
         # 唯一性检测
-        return ORM.unique_chk(db,rules,base_stmt)
+        return ORM.unique_chk(db,rules,expression)
 
     def create_user(self,db:Session,c_id:int,data:UserCreate)->Rsp:
         """创建用户
