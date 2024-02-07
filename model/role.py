@@ -26,7 +26,7 @@ class Role(ModelBase):
 
 
 class RoleUser(ModelBase):
-    __tablename__ = 't_role_name'
+    __tablename__ = 't_role_user'
     __table_args__ =  (
         UniqueConstraint('role_id','user_id',name='uni_role_user'),
         {'comment':'角色用户信息'}
