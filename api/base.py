@@ -13,10 +13,10 @@ def get_db()->Generator:
 
 oauth2_schema=OAuth2PasswordBearer(tokenUrl='/user/login')
 def get_user(token=Depends(oauth2_schema),db=Depends(get_db))->dict:
-    """获取已登录的用户信息,并校验用户的合法性..
+    """获取已登录的用户信息
     """
     user = user_api.jwt_decode(db,token)
-    return dict(id=user['user_id'],db=db)
+    return dict(db=db,**user)
 
 
 def get_page(page_idx:int=Query(default=1,description='页数'),page_size:int=Query(default=10,description='每页数量'))->dict:

@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from sqlalchemy import select,update,delete,and_,or_,alias
 from sqlalchemy.orm.session import Session
 from eromodapi.model.user import User #noqa
@@ -8,10 +8,10 @@ from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
 
 class OrgCreate(BaseModel):
-    name:str
-    owner_id:int
-    status:int = OrgSettings.status_enable
-    remark:str = ''
+    name:str = Field(description='组织名称')
+    owner_id:int = Field(description='组织拥有者用户ID')
+    status:int = Field(default=OrgSettings.status_enable,description='组织状态')
+    remark:str = Field(default='',description='组织备注信息')
 
 
 class OrgUpdate(BaseModel):
@@ -29,9 +29,6 @@ class OrgDelete(BaseModel):
 class OrgList(Pagination):
     name:str = ''
     status:int|None = None
-
-
-
 
 
 class OrgAPI():

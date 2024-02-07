@@ -4,7 +4,8 @@ from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
 from eromodapi.config.settings import settings,hash_api,jwt_api #noqa
 from eromodapi.model.user import User,UserAuth,UserSettings #noqa
-# from eromodapi.model.usercenter import User,UserAuth #noqa
+from eromodapi.model.org import Org,OrgSettings #noqa
+from eromodapi.model.role import Role,RoleUser,RoleSettings #noqa
 from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
 
@@ -52,11 +53,13 @@ class UserAPI:
             token:str jwt字符串
         """
         try:
-            data = jwt_api.decode(token)
+            jwt_data = jwt_api.decode(token)
         except Exception as e:
             raise RspError(401,'无效的用户token',f'{e}')
         
-        stmt = select(User.status).where(and_(User.id == data['user_id'],User.deleted==False))
+        user_id = jwt_data['user_id']
+
+        stmt = select(User.status).where(and_(User.id == user_id,User.deleted==False))
         result = ORM.one(db,stmt)
 
         # 无数据或用户已处于禁用状态,不可继续执行
@@ -67,8 +70,24 @@ class UserAPI:
         if result['status'] != UserSettings.status_enable:
             raise RspError(401,'账号已被停用')
         
-        # 获取角色信息
+        # 获取用户有效的角色信息
+        stmt = select(
+            RoleUser.role_id,
+            Org.id.label('org_id')
+        ).join_from(
+            RoleUser, Role,
+            and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
+        ).join(
+            Org,
+            and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
+        ).where(
+            RoleUser.user_id == user_id
+        )
 
+        access_list = ORM.all(db,stmt)
+        print(access_list)
+
+        data = dict(id=user_id,access_list=access_list)
         return data
 
     def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)->Rsp|None:
@@ -213,22 +232,23 @@ class UserAPI:
         except Exception as e:
             raise RspError(400,'解密用户密码失败',f'{e}')
         
-        stmt = select(User.id,
-                      User.nick_name,
-                      User.avatar,
-                      User.status,
-                      UserAuth.value).join_from(
-            User,UserAuth,
-            and_(
-                User.id == UserAuth.user_id,
-                User.deleted == False,
-                UserAuth.type == UserSettings.auth_password
+        stmt =  select(
+            User.id,
+            User.nick_name,
+            User.avatar,
+            User.status,
+            UserAuth.value).join_from(
+                User, UserAuth,
+                and_(
+                    User.id == UserAuth.user_id,
+                    User.deleted == False,
+                    UserAuth.type == UserSettings.auth_password
+                )
+            ).where(
+                User.acct == data.acct
             )
-        ).where(
-            User.acct == data.acct
-        )
-
-        result = ORM.one(db,stmt)      
+        
+        result = ORM.one(db,stmt)
 
         if not result or hash_api.verifty(plain_text,result['value']) == False:
             return Rsp(code=1,message='账号或密码错误')

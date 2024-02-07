@@ -25,6 +25,8 @@ class RoleList(Pagination):
     org_id:int|None = None
     status:int|None = None
 
+class RoleUserList(Pagination):
+    role_id:int
 
 
 class RoleAPI:
@@ -62,8 +64,6 @@ class RoleAPI:
 
         return Rsp()
 
-
-
     def get_list(self,db:Session,data:RoleList)->Rsp:
         """获取角色列信息
         """
@@ -81,6 +81,24 @@ class RoleAPI:
             stmt = stmt.where(Role.status == data.status)
 
         result = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[Role.c_dt.desc()])
+
+        return Rsp(data=result)
+    
+    def get_user_list(self,db:Session,data:RoleUserList)->Rsp:
+        """获取角色用户列表信息
+        """
+        stmt = select(
+            RoleUser.id,
+            User.nick_name,
+            User.real_name,
+            User.phone).join_from(
+                RoleUser,
+                User,
+                RoleUser.user_id == User.id,
+                isouter=True).where(
+                    RoleUser.role_id == data.role_id)
+        
+        result = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size)
 
         return Rsp(data=result)
 
