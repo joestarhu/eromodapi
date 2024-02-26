@@ -54,14 +54,14 @@ class ORM:
         """构建数据新增信息
         """
         now =datetime.now()
-        return dict(c_id=id,u_id=id,c_dt=now,u_dt=now)
+        return dict(crt_id=id,upd_id=id,crt_dt=now,upd_dt=now)
 
     @staticmethod
     def update_info(id:int)->dict:
         """构建数据更新信息
         """
         now =datetime.now()
-        return dict(u_id=id,u_dt=now)
+        return dict(upd_id=id,upd_dt=now)
 
 
     @orm_wrapper

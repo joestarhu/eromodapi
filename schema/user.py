@@ -1,4 +1,4 @@
-from enum import Enum
+from uuid import uuid4
 from pydantic import BaseModel,Field
 from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
@@ -71,23 +71,24 @@ class UserAPI:
             raise RspError(401,'账号已被停用')
         
         # 获取用户有效的角色信息
-        stmt = select(
-            RoleUser.role_id,
-            Org.id.label('org_id')
-        ).join_from(
-            RoleUser, Role,
-            and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
-        ).join(
-            Org,
-            and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
-        ).where(
-            RoleUser.user_id == user_id
-        )
+        # stmt = select(
+        #     RoleUser.role_id,
+        #     Org.id.label('org_id')
+        # ).join_from(
+        #     RoleUser, Role,
+        #     and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
+        # ).join(
+        #     Org,
+        #     and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
+        # ).where(
+        #     RoleUser.user_id == user_id
+        # )
 
-        access_list = ORM.all(db,stmt)
-        print(access_list)
+        # access_list = ORM.all(db,stmt)
+        # print(access_list)
 
-        data = dict(id=user_id,access_list=access_list)
+        # data = dict(id=user_id,access_list=access_list)
+        data = dict(id=user_id)
         return data
 
     def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)->Rsp|None:
@@ -119,18 +120,18 @@ class UserAPI:
         # 唯一性检测
         return ORM.unique_chk(db,rules,expression)
 
-    def create_user(self,db:Session,c_id:int,data:UserCreate)->Rsp:
+    def create_user(self,db:Session,crt_id:int,data:UserCreate)->Rsp:
         """创建用户
 
         Args:
             db:Session 数据库会话
-            c_id:int 操作用户ID
+            crt_id:int 操作用户ID
             data:UserCreate 新增用户数据
         """
         if data.phone == '':
             data.phone = None
 
-        insert_info = ORM.insert_info(c_id)
+        insert_info = ORM.insert_info(crt_id)
         u = User(**data.model_dump(),**insert_info)
 
         if rsp := self.chk_user_unique(db,data.acct,data.phone):
@@ -153,7 +154,7 @@ class UserAPI:
 
         return Rsp()
 
-    def update_user(self,db:Session,u_id:int,data:UserUpdate)->Rsp:
+    def update_user(self,db:Session,upd_id:int,data:UserUpdate)->Rsp:
         """修改用户信息
         """
         # 不允许操作系统初始用户
@@ -166,12 +167,12 @@ class UserAPI:
         if rsp := self.chk_user_unique(db,data.acct,data.phone,data.id):
             return rsp
 
-        update_info = ORM.update_info(u_id)
+        update_info = ORM.update_info(upd_id)
         stmt = update(User).where(User.id == data.id).values(nick_name=data.nick_name,real_name=data.real_name,phone=data.phone,status=data.status,**update_info)
         ORM.commit(db,stmt)
         return Rsp()
 
-    def delete_user(self,db:Session,u_id:int,data:UserDelete)->Rsp:
+    def delete_user(self,db:Session,upd_id:int,data:UserDelete)->Rsp:
         """删除用户信息
         """
         # 不允许操作系统初始用户
@@ -179,12 +180,13 @@ class UserAPI:
             return Rsp(code=1,message='系统初始用户不可操作')
         
         try:
-            update_info = ORM.update_info(u_id)
+            update_info = ORM.update_info(upd_id)
             for stmt in [
                 # 物理删除该用户的认证信息
                 delete(UserAuth).where(UserAuth.user_id == data.id),
                 # 逻辑删除用户的基础信息,释放账号和手机号,可供其他账号使用
-                update(User).where(User.id == data.id).values(deleted=True,acct=None,phone=None,**update_info)]:
+                update(User).where(User.id == data.id).values(deleted=True,acct=str(uuid4()),phone=None,**update_info)
+            ]:
                 db.execute(stmt)
             db.commit()
         except Exception as e:
@@ -198,10 +200,10 @@ class UserAPI:
         """
         b_user=alias(User)
         stmt = select(
-            User.id,User.acct,User.nick_name,User.phone,User.status,User.u_dt,
-            b_user.c.nick_name.label('u_nick_name'),
-            b_user.c.real_name.label('u_real_name'),
-        ).join_from(User,b_user, and_(User.u_id == b_user.c.id,User.deleted == False))
+            User.id,User.acct,User.nick_name,User.phone,User.status,User.upd_dt,
+            b_user.c.nick_name.label('upd_nick_name'),
+            b_user.c.real_name.label('upd_real_name'),
+        ).join_from(User,b_user, and_(User.upd_id == b_user.c.id,User.deleted == False))
 
         if data.status != None:
             stmt = stmt.where(User.status == data.status)
@@ -212,7 +214,7 @@ class UserAPI:
         if data.phone:
             stmt = stmt.where(User.phone.contains(data.phone))
 
-        data = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[User.c_dt.desc()])
+        data = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[User.crt_dt.desc()])
 
         return Rsp(data=data) 
 

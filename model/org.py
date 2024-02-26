@@ -15,7 +15,7 @@ class Org(ModelBase):
         {'comment': '组织信息'}
     )
 
-    name:M[str] = mc(String(64),unique=True,nullable=True,comment='组织名')
+    name:M[str] = mc(String(64),unique=True,comment='组织名')
     owner_id:M[int] = mc(ForeignKey("t_user.id", ondelete='restrict'), comment='组织拥有者ID')
     remark:M[str] = mc(String(512),default='',comment='备注信息')
     status:M[int] = mc(Integer,default=OrgSettings.status_enable,comment='组织状态 0:停用,1:启用')
