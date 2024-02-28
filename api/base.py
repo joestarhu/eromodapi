@@ -1,6 +1,7 @@
 from typing import Generator
 from fastapi import Depends,Query
 from fastapi.security import OAuth2PasswordBearer
+from fastapi import HTTPException
 from eromodapi.schema.user import user_api #noqa
 from eromodapi.model.base import SessionLocal #noqa
 
@@ -23,3 +24,12 @@ def get_page(page_idx:int=Query(default=1,description='页数'),page_size:int=Qu
     """获取分页数据
     """
     return dict(page_idx=page_idx,page_size=page_size)
+
+
+def access_chk(user:dict,services:str)->None:
+    """判断用户是否具备访问权限
+    """
+    if not user['roles']:
+        raise HTTPException(403,detail='用户无权访问')
+
+

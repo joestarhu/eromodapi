@@ -46,7 +46,7 @@ class UserList(Pagination):
 
 class UserAPI:
     def jwt_decode(self,db:Session,token:str)->dict:
-        """JWT token解码, 获取用户信息,权限等内容
+        """JWT token解码, 获取用户的账户,组织,权限等内容
 
         Args:
             db:Session 数据库会话
@@ -71,24 +71,22 @@ class UserAPI:
             raise RspError(401,'账号已被停用')
         
         # 获取用户有效的角色信息
-        # stmt = select(
-        #     RoleUser.role_id,
-        #     Org.id.label('org_id')
-        # ).join_from(
-        #     RoleUser, Role,
-        #     and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
-        # ).join(
-        #     Org,
-        #     and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
-        # ).where(
-        #     RoleUser.user_id == user_id
-        # )
+        stmt = select(
+            RoleUser.role_id,
+            Org.id.label('org_id')
+        ).join_from(
+            RoleUser, Role,
+            and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
+        ).join(
+            Org,
+            and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
+        ).where(
+            RoleUser.user_id == user_id
+        )
 
-        # access_list = ORM.all(db,stmt)
-        # print(access_list)
+        roles = ORM.all(db,stmt)
+        data = dict(id=user_id,roles=roles,orgs=[])
 
-        # data = dict(id=user_id,access_list=access_list)
-        data = dict(id=user_id)
         return data
 
     def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)->Rsp|None:
@@ -256,7 +254,7 @@ class UserAPI:
             return Rsp(code=1,message='账号或密码错误')
         
         if result['status'] != UserSettings.status_enable:
-            return Rsp(code=1,message='该账户已被停用')
+            return Rsp(code=1,message='账号已被停用')
             
         jwt = jwt_api.encode(user_id=result['id'])
         

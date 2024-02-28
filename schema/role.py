@@ -45,7 +45,7 @@ class RoleAPI:
 
         return ORM.unique_chk(db,rules,expression)
     
-    def create_role(self,db:Session,c_id:int,data:RoleCreate)->Rsp:
+    def create_role(self,db:Session,crt_id:int,data:RoleCreate)->Rsp:
         """创建角色
         """
 
@@ -53,7 +53,7 @@ class RoleAPI:
             return rsp
 
         # 是否已存在角色
-        create_info = ORM.insert_info(c_id)
+        create_info = ORM.insert_info(crt_id)
         role = RoleCreate(**data.model_dump(),**create_info)
         try:
             db.add(role)
@@ -68,11 +68,11 @@ class RoleAPI:
         """获取角色列信息
         """
         stmt = select(
-            Role.id,Role.name,Role.status,Role.org_id,Role.remark,Role.u_dt,
-            User.nick_name.label('u_nick_name'),
-            User.real_name.label('u_real_name'),
+            Role.id,Role.name,Role.status,Role.org_id,Role.remark,Role.upd_dt,
+            User.nick_name.label('upd_nick_name'),
+            User.real_name.label('upd_real_name'),
             Org.name.label('org_name'),
-        ).join(User, Role.u_id == User.id).join(Org, Role.org_id == Org.id)
+        ).join(User, Role.upd_id == User.id).join(Org, Role.org_id == Org.id)
 
         if data.name:
             stmt = stmt.where(Role.name.contains(data.name))
@@ -80,7 +80,7 @@ class RoleAPI:
         if data.status != None:
             stmt = stmt.where(Role.status == data.status)
 
-        result = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[Role.c_dt.desc()])
+        result = ORM.pagination(db,stmt,page_idx=data.page_idx,page_size=data.page_size,order=[Role.crt_dt.desc()])
 
         return Rsp(data=result)
     
