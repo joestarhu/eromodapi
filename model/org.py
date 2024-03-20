@@ -1,4 +1,4 @@
-from sqlalchemy import String,Integer,Boolean,ForeignKey
+from sqlalchemy import String,Integer,Boolean,BigInteger
 from sqlalchemy.orm import mapped_column as mc, Mapped as M
 from eromodapi.model.base import ModelBase #noqa
 
@@ -15,19 +15,18 @@ class Org(ModelBase):
         {'comment': '组织信息'}
     )
 
+    owner_id:M[int] = mc(BigInteger,comment='组织拥有者ID,与t_user.id一致')
     name:M[str] = mc(String(64),unique=True,comment='组织名')
-    owner_id:M[int] = mc(ForeignKey("t_user.id", ondelete='restrict'), comment='组织拥有者ID')
     remark:M[str] = mc(String(512),default='',comment='备注信息')
     status:M[int] = mc(Integer,default=OrgSettings.status_enable,comment='组织状态 0:停用,1:启用')
     deleted:M[bool] = mc(Boolean, default=False, comment='逻辑数据删除标志')
 
+# class Dept(ModelBase):
+#     __tablename__ = 't_dept'
+#     __table_args__ = (
+#         {'comment': '部门信息'}
+#     )
 
-class Dept(ModelBase):
-    __tablename__ = 't_dept'
-    __table_args__ = (
-        {'comment': '部门信息'}
-    )
-
-    name:M[str] = mc(String(64),comment='部门名')
-    org_id:M[int] = mc(ForeignKey("t_org.id", ondelete='restrict'), comment='所属组织ID')
-    remark:M[str] = mc(String(512),default='',comment='备注信息')
+#     name:M[str] = mc(String(64),comment='部门名')
+#     org_id:M[int] = mc(ForeignKey("t_org.id", ondelete='restrict'), comment='所属组织ID')
+#     remark:M[str] = mc(String(512),default='',comment='备注信息')

@@ -1,4 +1,4 @@
-from sqlalchemy import String,Integer,UniqueConstraint,ForeignKey
+from sqlalchemy import String,Integer,UniqueConstraint,ForeignKey,Boolean
 from sqlalchemy.orm import mapped_column as mc, Mapped as M
 from eromodapi.model.base import ModelBase #noqa
 
@@ -23,6 +23,7 @@ class Role(ModelBase):
     name:M[str] = mc(String(64),default='',comment='角色名')
     remark:M[str] = mc(String(512),default='',comment='备注信息')
     status:M[int] = mc(Integer, default=RoleSettings.status_enable, comment='角色状态 0:停用,1:启用') 
+    admin_flg:M[bool] = mc(Boolean,default=False,comment='是否管理员角色,管理员角色无数据权限和功能权限的限制')
 
 
 class RoleUser(ModelBase):

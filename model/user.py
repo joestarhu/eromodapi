@@ -1,4 +1,4 @@
-from sqlalchemy import String,Integer,Boolean,UniqueConstraint,ForeignKey
+from sqlalchemy import String,Integer,Boolean,UniqueConstraint,BigInteger
 from sqlalchemy.orm import mapped_column as mc, Mapped as M
 from eromodapi.model.base import ModelBase #noqa
 
@@ -19,8 +19,8 @@ class User(ModelBase):
         {'comment': '用户信息'}
     )
 
-    acct:M[str] = mc(String(64),unique=True,comment='用户账户,唯一')
-    phone:M[str] = mc(String(16), unique=True,nullable=True,comment='手机号,唯一')
+    acct:M[str] = mc(String(64),unique=True,comment='用户账户')
+    phone:M[str] = mc(String(16), default='',comment='手机号,业务上唯一')
     nick_name:M[str] = mc(String(64),default='',comment='用户昵称')
     real_name:M[str] = mc(String(64),default='',comment='用户实名')
     status:M[int] = mc(Integer, default=UserSettings.status_enable, comment='用户状态 0:停用,1:启用')
@@ -34,7 +34,7 @@ class UserAuth(ModelBase):
         {'comment': '用户鉴权信息'}
     )
 
-    user_id:M[int] = mc(ForeignKey("t_user.id", ondelete='cascade'), comment='用户ID')
+    user_id:M[int] = mc(BigInteger,comment='用户账户ID,与t_user.id一致')
     type:M[int] = mc(Integer,default=UserSettings.auth_password,comment='鉴权类型, 0:密码,1:钉钉')
     appid:M[str] = mc(String(256),default='',comment='鉴权类型的appid,比如微信的小程序ID,钉钉的H5应用ID')
     value:M[str] = mc(String(256),default='',comment='鉴权值,比如密码或其他身份标识')

@@ -9,9 +9,10 @@ from eromodapi.model.role import Role,RoleUser,RoleSettings #noqa
 from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
 
-
 # 请求参数
 class UserCreate(BaseModel):
+    """创建用户
+    """
     acct:str = Field(description='账号')
     nick_name:str = Field(description='昵称')
     real_name:str = Field(default='',description='实名')
@@ -21,6 +22,8 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    """更新用户
+    """
     id:int =  Field(description='用户ID')
     acct:str = Field(description='账号')
     nick_name:str = Field(description='昵称')
@@ -31,10 +34,14 @@ class UserUpdate(BaseModel):
 
 
 class UserDelete(BaseModel):
+    """删除用户(逻辑)
+    """
     id:int =  Field(description='用户ID')
 
 
 class PasswordLogin(BaseModel):
+    """密码登录
+    """
     acct:str = Field(description='账号')
     passwd:str= Field(description='密码')
 
@@ -71,20 +78,22 @@ class UserAPI:
             raise RspError(401,'账号已被停用')
         
         # 获取用户有效的角色信息
-        stmt = select(
-            RoleUser.role_id,
-            Org.id.label('org_id')
-        ).join_from(
-            RoleUser, Role,
-            and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
-        ).join(
-            Org,
-            and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
-        ).where(
-            RoleUser.user_id == user_id
-        )
+        # stmt = select(
+        #     RoleUser.role_id,
+        #     Org.id.label('org_id'),
+        #     Org.name
+        # ).join_from(
+        #     RoleUser, Role,
+        #     and_(RoleUser.role_id == Role.id, Role.status == RoleSettings.status_enable)
+        # ).join(
+        #     Org,
+        #     and_(Org.id == Role.org_id, Org.deleted == False, Org.status == OrgSettings.status_enable)
+        # ).where(
+        #     RoleUser.user_id == user_id
+        # )
 
-        roles = ORM.all(db,stmt)
+        # roles = ORM.all(db,stmt)
+        roles = []
         data = dict(id=user_id,roles=roles,orgs=[])
 
         return data
@@ -234,8 +243,6 @@ class UserAPI:
         
         stmt =  select(
             User.id,
-            User.nick_name,
-            User.avatar,
             User.status,
             UserAuth.value).join_from(
                 User, UserAuth,

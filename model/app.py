@@ -1,4 +1,4 @@
-from sqlalchemy import String,Integer,Boolean,ForeignKey,UniqueConstraint
+from sqlalchemy import String,ForeignKey,UniqueConstraint
 from sqlalchemy.orm import mapped_column as mc, Mapped as M
 from eromodapi.model.base import ModelBase #noqa
 
@@ -22,5 +22,5 @@ class AppService(ModelBase):
     )
 
     app_id:M[int] = mc(ForeignKey("t_app.id", ondelete='cascade'), comment='所属应用ID')
-    name:M[str] = mc(String(64),comment='应用服务标签')
+    name:M[str] = mc(String(64),comment='应用服务名称')
     remark:M[str] = mc(String(512),default='',comment='备注信息')

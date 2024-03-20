@@ -34,8 +34,11 @@ def orm_wrapper(func):
     def wrapper(*args,**kw):
         try:
             return func(*args,**kw)
+        except RspError as e:
+            raise e
         except Exception as e:
             raise RspError(data=f'{e}')
+
     return wrapper  
 
 
