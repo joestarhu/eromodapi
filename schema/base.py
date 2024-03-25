@@ -7,6 +7,12 @@ from sqlalchemy import select,func,Select
 from sqlalchemy.sql.elements import BinaryExpression
 from sqlalchemy.orm.session import Session
 
+class ActInfo(BaseModel):
+    """操作信息
+    """
+    user_id:int = Field(description='用户ID')
+
+
 class Rsp(BaseModel):
     """请求成功返回信息
     """

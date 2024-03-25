@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from eromodapi.config.settings import settings #noqa
-from eromodapi.api import user,org,role #noqa
+from eromodapi.api import user,auth,account,org,role #noqa
 
 def init_application()->FastAPI:
     """初始化FastAPI对象
@@ -19,6 +19,8 @@ def init_application()->FastAPI:
     )
 
     app.include_router(user.api,tags=['用户'])
+    app.include_router(account.api,tags=['账户'])
+    app.include_router(auth.api,tags=['认证'])
     app.include_router(org.api,tags=['组织'])
     app.include_router(role.api, tags=['角色'])
 
