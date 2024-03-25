@@ -1,5 +1,5 @@
 from fastapi import APIRouter,Depends,Query
-from eromodapi.schema.user import user_api,UserCreate,UserUpdate,UserDelete,UserList,PasswordLogin #noqa
+from eromodapi.schema.user import user_api,UserCreate,UserUpdate,UserDelete,UserList,PasswordLogin,SelectOrg #noqa
 from eromodapi.api.base import get_db,get_user,get_page,access_chk #noqa
 
 api = APIRouter(prefix='/user')
@@ -19,6 +19,9 @@ class UserServices:
 def login(*,db=Depends(get_db),data:PasswordLogin):
     return user_api.password_login(db,data)
 
+@api.post('/select_org',summary='切换组织')
+def select_org(*,user=Depends(get_user),data:SelectOrg):
+    return user_api.select_org(user,data)
 
 @api.post('/create',summary='新增用户')
 def create(*,user=Depends(get_user),data:UserCreate):

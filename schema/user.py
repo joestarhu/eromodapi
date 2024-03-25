@@ -4,7 +4,7 @@ from sqlalchemy import select,update,delete,and_,alias
 from sqlalchemy.orm.session import Session
 from eromodapi.config.settings import settings,hash_api,jwt_api #noqa
 from eromodapi.model.user import User,UserAuth,UserSettings #noqa
-from eromodapi.model.org import Org,OrgSettings #noqa
+from eromodapi.model.org import Org,OrgUser,OrgSettings #noqa
 from eromodapi.model.role import Role,RoleUser,RoleSettings #noqa
 from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
 
@@ -45,6 +45,11 @@ class PasswordLogin(BaseModel):
     acct:str = Field(description='账号')
     passwd:str= Field(description='密码')
 
+class SelectOrg(BaseModel):
+    """选择组织
+    """
+    org_id:int = Field(description='组织ID')
+
 
 class UserList(Pagination):
     nick_name:str | None = None
@@ -65,6 +70,9 @@ class UserAPI:
             raise RspError(401,'无效的用户token',f'{e}')
         
         user_id = jwt_data['user_id']
+        user_orgs = jwt_data['user_orgs']
+        login_org = jwt_data.get('login_org',None)
+
 
         stmt = select(User.status).where(and_(User.id == user_id,User.deleted==False))
         result = ORM.one(db,stmt)
@@ -93,10 +101,14 @@ class UserAPI:
         # )
 
         # roles = ORM.all(db,stmt)
-        roles = []
-        data = dict(id=user_id,roles=roles,orgs=[])
+        data = dict(id=user_id,user_orgs=user_orgs,login_org=login_org)
 
         return data
+
+    def jwt_encode(self,user_id,user_orgs:list=[],login_org:int=None)->dict:
+        """
+        """
+        return jwt_api.encode(user_id=user_id,user_orgs=user_orgs,login_org=login_org)
 
     def chk_user_unique(self,db:Session,acct:str='',phone:str='',except_id:int=None)->Rsp|None:
         """检查必填字段是否
@@ -192,7 +204,7 @@ class UserAPI:
                 # 物理删除该用户的认证信息
                 delete(UserAuth).where(UserAuth.user_id == data.id),
                 # 逻辑删除用户的基础信息,释放账号和手机号,可供其他账号使用
-                update(User).where(User.id == data.id).values(deleted=True,acct=str(uuid4()),phone=None,**update_info)
+                update(User).where(User.id == data.id).values(deleted=True,acct=str(uuid4()),phone='',**update_info)
             ]:
                 db.execute(stmt)
             db.commit()
@@ -255,16 +267,45 @@ class UserAPI:
                 User.acct == data.acct
             )
         
-        result = ORM.one(db,stmt)
+        user = ORM.one(db,stmt)
 
-        if not result or hash_api.verifty(plain_text,result['value']) == False:
+        if not user or hash_api.verifty(plain_text,user['value']) == False:
             return Rsp(code=1,message='账号或密码错误')
         
-        if result['status'] != UserSettings.status_enable:
+        if user['status'] != UserSettings.status_enable:
             return Rsp(code=1,message='账号已被停用')
-            
-        jwt = jwt_api.encode(user_id=result['id'])
         
+        # 获取用户组织信息
+        stmt = select(
+            Org.id,
+            Org.name).join_from(
+                Org,OrgUser,
+                and_(
+                    Org.id == OrgUser.org_id,
+                    Org.deleted == False,
+                    Org.status == OrgSettings.status_enable,
+                    OrgUser.status == OrgSettings.user_status_enable
+                )
+            ).where(
+                OrgUser.user_id == user['id']
+            )
+        
+        user_orgs = ORM.all(db,stmt)
+
+        # 当用户仅属于一个组织的时候,默认取这个组织作为登录组织
+        if len(user_orgs) == 1:
+            login_org = user_orgs[0]['id']
+        else:
+            login_org = None 
+
+        jwt = self.jwt_encode(user_id=user['id'],user_orgs=user_orgs,login_org=login_org)
+        
+        return Rsp(data=dict(jwt=jwt))
+
+    def select_org(self,user:dict,data:SelectOrg)->Rsp:
+        """选择登录组织(更新JWT)
+        """
+        jwt = self.jwt_encode(user['id'],user['user_orgs'],data.org_id)
         return Rsp(data=dict(jwt=jwt))
 
 

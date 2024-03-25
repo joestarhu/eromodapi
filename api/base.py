@@ -29,7 +29,8 @@ def get_page(page_idx:int=Query(default=1,description='页数'),page_size:int=Qu
 def access_chk(user:dict,services:str)->None:
     """判断用户是否具备访问权限
     """
-    if not user['roles']:
-        raise HTTPException(403,detail='用户无权访问')
+    pass
+    # if not user['roles']:
+    #     raise HTTPException(403,detail='用户无权访问')
 
 
