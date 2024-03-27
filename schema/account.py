@@ -18,6 +18,7 @@ class AccountCreate(BaseModel):
     status:int = Field(default=UserSettings.status_enable,description='状态')
     avatar:str = Field(default='',description='头像URL')
 
+
 class AccountUpdate(BaseModel):
     """修改账号
     """
@@ -25,6 +26,7 @@ class AccountUpdate(BaseModel):
     nick_name:str = Field(description='昵称')
     real_name:str = Field(default='',description='实名')
     status:int = Field(description='状态')
+
 
 class AccountDelete(BaseModel):
     """删除账号

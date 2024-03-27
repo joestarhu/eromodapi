@@ -11,6 +11,7 @@ class ActInfo(BaseModel):
     """操作信息
     """
     user_id:int = Field(description='用户ID')
+    org_id:int|None = Field(default=None,description='登录组织ID')
 
 
 class Rsp(BaseModel):

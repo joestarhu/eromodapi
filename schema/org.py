@@ -1,11 +1,11 @@
-from datetime import datetime
 from uuid import uuid4
 from pydantic import BaseModel,Field
-from sqlalchemy import select,update,delete,and_,or_,alias
+from sqlalchemy import select,update,and_,alias
 from sqlalchemy.orm.session import Session
 from eromodapi.model.user import User #noqa
-from eromodapi.model.org import Org,OrgSettings #noqa
-from eromodapi.schema.base import ORM,Rsp,RspError,Pagination #noqa
+from eromodapi.model.org import Org,OrgUser,OrgSettings #noqa
+from eromodapi.model.role import Role,RoleUser #noqa
+from eromodapi.schema.base import ORM,Rsp,RspError,Pagination,ActInfo #noqa
 
 
 class OrgCreate(BaseModel):
@@ -32,74 +32,86 @@ class OrgList(Pagination):
     status:int|None = None
 
 
-class OrgAPI():
-    def chk_org_unique(self,db:Session,name:str,except_id:int=None)->Rsp|None:
-        """判断组织是否重复
+class OrgAPI:
+    def chk_unique(self,db:Session,name:str,except_id:int=None)->Rsp|None:
+        """唯一性判断
         """
-
-        if except_id:
-            expression = Org.id != except_id
-        else:
+        if except_id is None:
             expression = None
+        else:
+            expression = Org.id != except_id
 
         rules = [
-            ('组织名称已被使用',and_(Org.name == name,Org.deleted == False))
+            ('组织名称已被使用',and_(Org.name==name,Org.deleted == False)),
         ]
 
         return ORM.unique_chk(db,rules,expression)
-
-    def create_org(self,db:Session,crt_id:int,data:OrgCreate)->Rsp:
-        """创建组织
+    
+    def create(self,db:Session,act:ActInfo,data:OrgCreate)->Rsp:
+        """新增组织
         """
-
-        if rsp := self.chk_org_unique(db,data.name):
+        if rsp := self.chk_unique(db,name=data.name):
             return rsp
-
-        insert_info = ORM.insert_info(crt_id)
-        org = Org(**data.model_dump(),**insert_info)
+        
+        insert_info = ORM.insert_info(act.user_id)
+        org = Org(**data.model_dump(),**insert_info)        
 
         try:
             db.add(org)
+            db.flush()
+
+            # 为组织初始化超级管理员角色
+            r = Role(name='超级管理员',remark='组织初始化角色',org_id=org.id,admin_flg=True,**insert_info)
+            db.add(r)
+            db.flush()
+
+            # 将管理员加入组织
+            ou = OrgUser(org_id=org.id,user_id = data.owner_id,**insert_info)
+            db.add(ou)
+
+            # 为组织初始化的管理者追加超级管理员角色
+            ru = RoleUser(role_id = r.id, user_id = data.owner_id,**insert_info)
+            db.add(ru)
             db.commit()
+
         except Exception as e:
             db.rollback()
             raise RspError(data=f'{e}')
 
         return Rsp()
-    
-    def update_org(self,db:Session,crt_id:int,data:OrgUpdate)->Rsp:
-        """更新组织
+
+    def update(self,db:Session,act:ActInfo,data:OrgUpdate)->Rsp:
+        """修改组织
         """
         if data.id == 1:
             return Rsp(code=1,message='系统初始组织不可操作')
         
-        condtion = and_(Org.id == data.id, Org.deleted == False)
-        stmt = select(Org.id).where(condtion)
-        if ORM.counts(db,stmt) == 0:
-            return Rsp(code=1,message='不存在该组织')
-
-        if rsp := self.chk_org_unique(db,name=data.name,except_id=data.id):
+        if rsp := self.chk_unique(db,name=data.name,except_id=data.id):
             return rsp
-
-        update_info = ORM.update_info(crt_id)
-        stmt = update(Org).where(condtion).values(**data.model_dump(exclude_unset=True),**update_info)
+        
+        update_info = ORM.update_info(act.user_id)
+        stmt = update(Org).where(
+            Org.id == data.id
+        ).values(
+            **data.model_dump(exclude_unset=True),**update_info
+        )
         ORM.commit(db,stmt)
-        return Rsp()
 
-    def delete_org(self,db:Session,crt_id:int,data:OrgDelete)->Rsp:
+        return Rsp()
+    
+    def delete(self,db:Session,act:ActInfo,data:OrgDelete)->Rsp:
         """删除组织(仅做逻辑删除)
         """
-
         if data.id == 1:
             return Rsp(code=1,message='系统初始组织不可操作')
 
-        update_info = ORM.update_info(crt_id)
+        update_info = ORM.update_info(act.user_id)
         stmt = update(Org).where(Org.id == data.id).values(name=str(uuid4()),deleted=True,**update_info)
         ORM.commit(db,stmt)
         
         return Rsp()
 
-    def get_list(self,db:Session,data:OrgList)->Rsp:
+    def get_list(self,db:Session,data:OrgList):
         """获取组织列表
         """
         owner_user = alias(User)
@@ -113,7 +125,7 @@ class OrgAPI():
             owner_user,Org.owner_id == owner_user.c.id
         )
 
-        if data.status != None:
+        if data.status is not None:
             stmt = stmt.where(Org.status == data.status)
 
         if data.name != '':
@@ -122,11 +134,19 @@ class OrgAPI():
         data = ORM.pagination(db,stmt,data.page_idx,data.page_size,[Org.upd_dt.desc()])
         return Rsp(data=data)
 
-    def get_org_detail(self,db:Session,id:int)->Rsp:
-        """获取详情
+    def get_detail(self,db:Session,id:int):
+        """获取组织详情
         """
-        stmt = select(Org.id,Org.owner_id,Org.name,Org.status,Org.remark).where(and_(Org.deleted == False,Org.id == id))
+        stmt = select(
+            Org.id,Org.owner_id,Org.name,Org.status,Org.remark,
+            User.phone,User.nick_name.label('owner_name')
+        ).join_from(Org,User,and_(Org.deleted == False, Org.owner_id == User.id)
+                    ).where(
+                        Org.id == id
+                    )
+        # stmt = select(Org.id,Org.owner_id,Org.name,Org.status,Org.remark).where(and_(Org.deleted == False,Org.id == id))
         result = ORM.one(db,stmt)
         return Rsp(data=result)
+
 
 org_api = OrgAPI()

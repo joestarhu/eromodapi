@@ -18,8 +18,8 @@ def get_user(token=Depends(oauth2_schema),db=Depends(get_db))->dict:
     """获取已登录的用户信息
     """
     payload = auth_api.jwt_decode(token)
-    act_info = ActInfo(user_id = payload['user_id'])
-    return dict(db=db,act_info=act_info)
+    act = ActInfo(user_id = payload['user_id'],org_id=payload['login_org'])
+    return dict(db=db,act=act)
 
 
 def get_page(page_idx:int=Query(default=1,description='页数'),page_size:int=Query(default=10,description='每页数量'))->dict:

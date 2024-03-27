@@ -18,14 +18,14 @@ def get_list(*,user=Depends(get_user),id:int):
 
 @api.post('/create',summary='新增账号')
 def create(*,user=Depends(get_user),data:AccountCreate):
-    return account_api.create(user['db'],user['act_info'],data)
+    return account_api.create(user['db'],user['act'],data)
 
 
 @api.post('/update',summary='修改账号')
 def update(*,user=Depends(get_user),data:AccountUpdate):
-    return account_api.update(user['db'],user['act_info'],data)
+    return account_api.update(user['db'],user['act'],data)
 
 
 @api.post('/delete',summary='删除账号')
 def delete(*,user=Depends(get_user),data:AccountDelete):
-    return account_api.delete(user['db'],user['act_info'],data)
+    return account_api.delete(user['db'],user['act'],data)
