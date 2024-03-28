@@ -35,12 +35,11 @@ class AuthAPI:
         except Exception as e:
             raise RspError(401,'无效的用户token',f'{e}')
 
-        user_id = jwt_data['user_id']
-        nick_name = jwt_data['nick_name']
-        user_orgs = jwt_data['user_orgs']
-        login_org = jwt_data.get('login_org',None)
+        payload = {}
 
-        return dict(user_id=user_id,nick_name=nick_name,user_orgs=user_orgs,login_org=login_org)
+        for kw in ["user_id","nick_name","user_orgs","login_org"]:
+            payload[kw] = jwt_data.get(kw,None)
+        return payload
 
     def select_org(self,payload:dict,data:SelectOrg)->Rsp:
         """选择登录组织(更新JWT)
@@ -58,7 +57,7 @@ class AuthAPI:
         except Exception as e:
             raise RspError(400,'解密用户密码失败',f'{e}')
         
-
+        # 获取账号基本信息
         stmt =  select(
             User.id,
             User.nick_name,
@@ -81,6 +80,12 @@ class AuthAPI:
         
         if user['status'] != UserSettings.status_enable:
             return Rsp(code=1,message='账号已被停用')
+        
+
+        # 获取用户权限
+
+
+
         
         # 获取用户组织信息
         stmt = select(
@@ -105,8 +110,10 @@ class AuthAPI:
         else:
             login_org = None 
 
+        # 获取应用角色数据
         jwt = self.jwt_encode(user_id=user['id'],nick_name=user['nick_name'],user_orgs=user_orgs,login_org=login_org)
-        
         return Rsp(data=dict(jwt=jwt))
+
+
 
 auth_api = AuthAPI()

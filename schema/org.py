@@ -66,14 +66,14 @@ class OrgAPI:
             db.flush()
 
             # 将管理员加入组织
-            ou = OrgUser(org_id=org.id,user_id = data.owner_id,**insert_info)
+            ou = OrgUser(org_id=org.id,user_id=data.owner_id,**insert_info)
             db.add(ou)
 
-            # 为组织初始化的管理者追加超级管理员角色
-            ru = RoleUser(role_id = r.id, user_id = data.owner_id,**insert_info)
+            # 为组织初始化的管理者追加超级管理员角色,冗余组织ID和超级管理员标志
+            ru = RoleUser(role_id=r.id, user_id=data.owner_id,org_id=org.id,admin_flg=r.admin_flg,**insert_info)
             db.add(ru)
-            db.commit()
 
+            db.commit()
         except Exception as e:
             db.rollback()
             raise RspError(data=f'{e}')

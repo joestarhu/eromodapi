@@ -1,4 +1,5 @@
-from sqlalchemy import String,Integer,Boolean,BigInteger,UniqueConstraint
+from datetime import datetime
+from sqlalchemy import String,Integer,Boolean,BigInteger,DateTime,UniqueConstraint
 from sqlalchemy.orm import mapped_column as mc, Mapped as M
 from eromodapi.model.base import ModelBase #noqa
 
@@ -9,6 +10,9 @@ class OrgSettings:
 
     user_status_disable:int = 0
     user_status_enable:int = 1
+
+    app_status_disable:int = 0
+    app_status_enable:int = 1
 
 
 
@@ -35,6 +39,20 @@ class OrgUser(ModelBase):
     org_id:M[int] = mc(BigInteger,comment='组织ID,与t_org.id一致')
     user_id:M[int] = mc(BigInteger,comment='用户账户ID,与t_user.id一致')
     status:M[int] = mc(Integer,default=OrgSettings.user_status_enable,comment='组织用户状态 0:停用,1:启用')
+
+
+class OrgApp(ModelBase):
+    __tablename__ = 't_org_app'
+    __table_args__ = (
+        UniqueConstraint('org_id','app_id',name='uni_org_app'),
+        {'comment':'组织应用信息'}
+    )
+
+    org_id:M[int] = mc(BigInteger,comment='组织ID,与t_org.id一致')
+    app_id:M[int] = mc(BigInteger,comment='应用ID,与t_app.id一致')
+    status:M[int] = mc(Integer,default=OrgSettings.app_status_enable, comment='组织应用状态')
+    expire_date:M[datetime] = mc(DateTime,comment='组织应用有效期')
+
 
 # class Dept(ModelBase):
 #     __tablename__ = 't_dept'

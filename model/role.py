@@ -32,3 +32,7 @@ class RoleUser(ModelBase):
     role_id:M[int] = mc(BigInteger,comment='角色ID,与t_role.id一致')
     user_id:M[int] = mc(BigInteger,comment='用户账户ID,与t_user.id一致')
 
+    # 冗余org_id和admin_flg
+    org_id:M[int] = mc(BigInteger,comment='组织ID,与t_org.id一致')
+    admin_flg:M[bool] = mc(Boolean,default=False,comment='是否管理员角色,管理员角色无数据权限和功能权限的限制')
+
